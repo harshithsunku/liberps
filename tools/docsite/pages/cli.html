@@ -1,0 +1,138 @@
+<div class="page-head">
+  <p class="eyebrow">Commands</p>
+  <h1>Command reference</h1>
+  <p class="lead">The command layer turns text lines into configuration, operator commands and <code>show</code> views. <code>erpsd</code>, <code>erpsctl</code> and <code>erps-sim</code> all use it, and it embeds into any CLI.</p>
+</div>
+
+<section id="commands">
+  <header><h2>Commands</h2></header>
+  <p class="read muted">Configuration keywords can be combined on one line. Durations take <code>ms</code>, <code>s</code>, <code>m</code> or <code>h</code>; a bare number is milliseconds. Blank lines and lines starting with <code>#</code> or <code>!</code> are ignored.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; ring-id &lt;1-239&gt; raps-vid &lt;1-4094&gt; port0 &lt;port&gt; port1 &lt;port&gt;</code></td><td>Create or configure a ring instance</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; role owner|neighbour|none [rpl-port &lt;0|1&gt;]</code></td><td>RPL role of this node</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; node-id &lt;mac&gt;|auto</code></td><td>Node ID; <code>auto</code> takes the platform's system MAC</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; mel &lt;0-7&gt;</code> · <code>pcp &lt;0-7&gt;</code></td><td>Ring MEG level; 802.1Q priority of R-APS</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; revertive|non-revertive</code></td><td>Reversion mode (live)</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; compat-version &lt;1|2&gt;</code></td><td>Interworking with 2008-only nodes</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; timers [wtr &lt;dur&gt;] [guard &lt;dur&gt;] [holdoff &lt;dur&gt;]</code></td><td>WTR 1–12 min, guard 10 ms–2 s, hold-off 0–10 s (live)</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; init-timer wtr|wtb</code></td><td>Owner's timer at start-up; <code>wtb</code> converges faster after a cold start</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; protected-vlans [add|remove] &lt;list&gt;</code></td><td>VLANs the instance protects, e.g. <code>10-20,30</code></td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; sw-forwarding on|off</code></td><td>Forward R-APS between ring ports in software</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; fop-pm on|off</code> · <code>fop-to on|off</code> · <code>fop-timeout &lt;dur&gt;</code></td><td>Failure-of-protocol alarms</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; relaxed-timers on|off</code></td><td>Allow out-of-range timers (lab use)</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; enable|disable</code></td><td>Start or stop the instance; <code>disable</code> leaves both ring ports blocked</td></tr>
+        <tr><td class="wrap"><code>no erps ring &lt;name&gt;</code></td><td>Delete a ring</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; force-switch port &lt;0|1&gt;</code></td><td>Operator forced switch</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; manual-switch port &lt;0|1&gt;</code></td><td>Operator manual switch</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; clear</code></td><td>Clear a local FS or MS, or revert at the RPL owner</td></tr>
+        <tr><td class="wrap"><code>erps ring &lt;name&gt; flush-event</code></td><td>Send an R-APS flush event burst</td></tr>
+        <tr><td class="wrap"><code>show erps [summary] [json]</code></td><td>One line per ring</td></tr>
+        <tr><td class="wrap"><code>show erps ring &lt;name&gt; [detail|status|config|counters|history] [json]</code></td><td>Ring details</td></tr>
+        <tr><td class="wrap"><code>show running-config erps</code></td><td>The configuration as commands</td></tr>
+        <tr><td class="wrap"><code>clear erps [ring &lt;name&gt;] counters</code></td><td>Reset counters</td></tr>
+        <tr><td class="wrap"><code>debug erps [ring &lt;name&gt;] level &lt;error|warning|notice|info|debug|trace&gt;</code></td><td>Log level; <code>debug</code> logs every executed row</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="read muted">While a ring is enabled, timers and the revertive mode change live. Ports, role, ring ID and the other identity settings need <code>disable</code> first, and the command says so.</p>
+</section>
+
+<section id="show">
+  <header><h2>Show output</h2></header>
+  <p class="read">From the simulator: a four-node ring two seconds after link 1 failed. The detail view is shortened here.</p>
+  <pre class="code">&gt; show erps
+Ring         ID   VID   Role          State          Port0              Port1              Top request
+n0           1    100   rpl-neighbour Protection     n0.p0:F            n0.p1:F            R-APS(SF) 02:00:00:00:00:03 bpr0 @p0
+n1           1    100   none          Protection     n1.p0:F            n1.p1:B            local-SF p1
+n2           1    100   none          Protection     n2.p0:B            n2.p1:F            local-SF p0
+n3           1    100   rpl-owner     Protection     n3.p0:F            n3.p1:F            R-APS(SF) 02:00:00:00:00:02 bpr1 @p1
+
+&gt; show erps ring n3 detail
+ERP instance n3
+  Ring ID 1, R-APS VID 100, MEL 7, node ID 02:00:00:00:00:04
+  Role: rpl-owner, RPL port 1 (n3.p1)
+  Mode: revertive, compatible-version 2, software R-APS forwarding
+  Timers: WTR 5m00s, WTB 5.500s, guard 500ms, hold-off 0ms
+  State: Protection (B), since t=301.001050, last row 21
+  Top request: R-APS(SF) 02:00:00:00:00:02 bpr1 @p1
+  Port 0 n3.p0      Forwarding SF:no  last rx R-APS(SF) 02:00:00:00:00:03 bpr0 (0ms ago)
+  Port 1 n3.p1      Forwarding SF:no  last rx R-APS(SF) 02:00:00:00:00:02 bpr1 (0ms ago)
+  Counters:                       port0      port1
+    rx NR                            63         62
+    rx SF                             3          2
+    forwarded                         2          2
+    ...
+  History (5):
+    #1 t=0.000000 init-&gt;E row 1 init [block-p1 tx start-wtr] ports ---&gt;-B tx=R-APS(NR) 02:00:00:00:00:04 bpr1
+    #3 t=300.000000 E-&gt;A row 66 WTR-expires [tx] ports -B-&gt;-B tx=R-APS(NR,RB,DNF) 02:00:00:00:00:04 bpr1
+    #4 t=301.001050 A-&gt;B row 7 R-APS(SF) 02:00:00:00:00:03 bpr0 @p0 [unblock-p1 stop-tx] ports -B-&gt;--
+    #5 t=301.004383 B-&gt;B row 21 R-APS(SF) 02:00:00:00:00:03 bpr0 @p0 [] ports ---&gt;-- (x3 more, last t=301.007766)</pre>
+  <p class="read">Add <code>json</code> to any view for machine-readable output:</p>
+  <pre class="code">&gt; show erps ring n3 status json
+{"status":{"state":"Protection","state_letter":"B","running":true,"last_row":21,
+ "last_change_us":301001050,"top_request":"R-APS(SF) 02:00:00:00:00:02 bpr1 @p1",
+ "ports":[{"blocked":false,"sf":false,"ssf":false,"holdoff":false,"fop_to":false,
+           "last_rx_us":301007716,"last_rx":{"text":"R-APS(SF) 02:00:00:00:00:03 bpr0","req":11,
+           "rb":false,"dnf":false,"bpr":0,"node_id":"02:00:00:00:00:03"}}, ...],
+ "tx":null,"timers":{"wtr_us":0,"wtb_us":0,"guard_us":0},"command":null,"fop_pm":false}}</pre>
+</section>
+
+<section id="running-config">
+  <header><h2>Configuration files</h2></header>
+  <p class="read">A configuration file is a command script, and <code>show running-config erps</code> prints one that recreates the current configuration exactly. Replaying it on a fresh instance produces the same running-config; a test checks that.</p>
+  <pre class="code">erps ring R1 ring-id 3 raps-vid 200 mel 5 port0 eth1 port1 eth2
+erps ring R1 node-id 02:00:00:00:00:42
+erps ring R1 role neighbour rpl-port 0
+erps ring R1 timers wtr 7m guard 1s holdoff 300ms
+erps ring R1 non-revertive
+erps ring R1 protected-vlans 1-5,7,9-10
+erps ring R1 sw-forwarding on
+erps ring R1 enable
+!</pre>
+  <p class="read muted">Long VLAN lists are split over several <code>protected-vlans add</code> lines so every line stays within the parser's limit.</p>
+</section>
+
+<section id="embedding">
+  <header><h2>Embedding the command layer</h2></header>
+  <p class="read">A host supplies the current time and, to create rings, a way to bind a ring to its dataplane. Everything else is in the library.</p>
+  <pre class="code">#include &lt;erps/erps_cli.h&gt;
+
+erps_cli_platform_t p = {
+    .ctx = my,
+    .now = my_now,                    <span class="c">/* required */</span>
+    .port_lookup = my_port_lookup,    <span class="c">/* "eth1" -&gt; handle (+ MAC); optional */</span>
+    .system_mac = my_system_mac,      <span class="c">/* for node-id auto; optional */</span>
+    .instance_bind = my_bind,         <span class="c">/* fill erps_ops_t + user for a ring being enabled */</span>
+    .instance_unbind = my_unbind,
+};
+erps_cli_t *cli = erps_cli_create(&amp;p);
+erps_cli_exec(cli, "erps ring R1 enable", out_fn, out_ctx);   <span class="c">/* errors print as "% ..." */</span>
+
+size_t n;
+const erps_cli_cmd_t *cmds = erps_cli_commands(&amp;n);   <span class="c">/* syntax + help, for host grammars */</span></pre>
+  <p class="read muted"><code>instance_bind</code> may adjust the configuration before the instance is created; the Linux platform uses this to turn on software R-APS forwarding and set port MACs. <code>erps_cli_attach()</code> exposes instances you created yourself to <code>show</code> and the operator commands.</p>
+</section>
+
+<section id="sim">
+  <header><h2>Simulator commands</h2></header>
+  <p class="read muted">In <code>erps-sim</code>, every command above works on the rings <code>n0</code>…<code>n&lt;N-1&gt;</code>, plus these:</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Command</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td class="wrap"><code>sim create &lt;nodes&gt; [owner &lt;n&gt;] [no-neighbour] [non-revertive] [compat &lt;1|2&gt;] [wtr|guard|holdoff &lt;dur&gt;] [delay &lt;us&gt;] [jitter &lt;us&gt;] [loss &lt;0..1&gt;] [seed &lt;n&gt;] [id &lt;node&gt; &lt;octet&gt;]</code></td><td>Build a ring and start every node</td></tr>
+        <tr><td><code>run &lt;dur&gt;</code></td><td>Advance virtual time</td></tr>
+        <tr><td><code>link &lt;i&gt; down|up [cw|ccw]</code></td><td>Fail or restore a link, both directions or one</td></tr>
+        <tr><td><code>node &lt;i&gt; down|up</code></td><td>Node failure, and recovery as a fresh restart</td></tr>
+        <tr><td><code>node &lt;i&gt; fs &lt;0|1&gt;</code> · <code>ms &lt;0|1&gt;</code> · <code>clear</code></td><td>Operator commands on a node</td></tr>
+        <tr><td><code>show</code></td><td>One-line ring summary, e.g. <code>n2:B[-B]</code> = Protection, port 1 blocked</td></tr>
+        <tr><td><code>events on|off</code> · <code>log &lt;level&gt;|off</code></td><td>Print protocol events or node logs</td></tr>
+        <tr><td><code>pcap &lt;file&gt;|off</code></td><td>Capture all R-APS frames</td></tr>
+        <tr><td><code>expect state &lt;node&gt; &lt;A-E&gt;</code> · <code>expect blocked &lt;node&gt; &lt;port&gt; yes|no</code> · <code>expect no-loops</code></td><td>Assertions for scripts</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>

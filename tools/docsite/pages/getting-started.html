@@ -1,0 +1,118 @@
+<div class="page-head">
+  <p class="eyebrow">Get started</p>
+  <h1>Build, test, simulate, embed</h1>
+  <p class="lead">liberps has no dependencies beyond a C11 compiler and GNU make. Python 3 is used only by the coverage summary and the Linux end-to-end test.</p>
+</div>
+
+<section id="build">
+  <header><h2>Build</h2></header>
+  <pre class="code">make                      <span class="c"># liberps.a, liberps.so, erps-sim, erpsd + erpsctl (Linux), examples</span>
+make CC=clang             <span class="c"># each compiler / sanitizer mix builds into its own build/&lt;cc&gt;... directory</span>
+make install PREFIX=/usr/local   <span class="c"># headers, liberps.a/.so, liberps-sim.a, pkg-config file</span></pre>
+  <p class="read muted">Outputs land in <code>build/&lt;compiler&gt;[-&lt;sanitizers&gt;]/</code>. The shared library exports only the public <code>erps_*</code> API. <code>V=1</code> shows the full compiler command lines.</p>
+</section>
+
+<section id="test">
+  <header><h2>Test</h2></header>
+  <pre class="code">make test                 <span class="c"># unit + scenario + chaos (300 random rings)</span>
+make check                <span class="c"># gcc and clang, each plain and with ASan + UBSan</span>
+make cov                  <span class="c"># gcc --coverage, per-file line coverage of the core</span>
+make fuzz FUZZ_SECONDS=60 <span class="c"># clang libFuzzer targets</span>
+make e2e                  <span class="c"># Linux: four erpsd on kernel bridges, no root needed</span>
+ERPS_CHAOS_SEEDS=100000 build/gcc/test-chaos   <span class="c"># deeper property testing</span></pre>
+  <p class="read muted">Run one test by name: <code>build/gcc/test-unit -v row20</code>. Scenario tests print every simulator event with <code>ERPS_TEST_LOG=4</code>, and a chaos failure prints the command that replays it.</p>
+</section>
+
+<section id="simulate">
+  <header><h2>Run the simulator</h2></header>
+  <p class="read">The simulator shell builds a ring of any size on a virtual clock, so a five-minute WTR passes instantly. Rings are named <code>n0</code>…<code>n&lt;N-1&gt;</code>; link <em>i</em> joins node <em>i</em> port 1 and node <em>i+1</em> port 0, and by default the last node owns the RPL.</p>
+  <pre class="code">$ build/cc/erps-sim
+erps-sim&gt; sim create 5
+ring of 5 nodes, RPL = link 4 (owner n4, neighbour n0), revertive
+erps-sim&gt; run 6m
+[  300.000000] n4 Pending -&gt; Idle (row 66, WTR-expires)
+[  300.000050] n3 Pending -&gt; Idle (row 70, R-APS(NR,RB))
+...
+erps-sim&gt; link 2 down
+erps-sim&gt; run 1s
+[  360.001000] n2 port 1 signal fail declared
+[  360.001000] n2 port 1 blocked
+[  360.001000] n2 Idle -&gt; Protection (row 5, local-SF)
+[  360.001000] n3 Idle -&gt; Protection (row 5, local-SF)
+[  360.001050] n4 port 1 unblocked
+[  360.001050] n4 Idle -&gt; Protection (row 7, R-APS(SF))
+...
+erps-sim&gt; show
+t=361.000000 n0:B[--] n1:B[--] n2:B[-B] n3:B[B-] n4:B[--] links-down 2:x
+erps-sim&gt; show erps ring n4 history
+erps-sim&gt; pcap ring.pcap          <span class="c"># Wireshark decodes R-APS</span></pre>
+  <p class="read muted">Two scripts ship in <code>examples/</code>: <code>appendix3.erps</code> replays Appendix III scenario A, and <code>tour.erps</code> covers manual switch, forced switch, an RPL failure and a node failure. Scripts can assert with <code>expect state</code>, <code>expect blocked</code> and <code>expect no-loops</code>, and the shell exits non-zero when one fails.</p>
+</section>
+
+<section id="embed">
+  <header><h2>Embed the library</h2></header>
+  <p class="read">A platform implements three callbacks and feeds three kinds of input. <code>examples/two_nodes.c</code> is a complete, runnable integration in about 200 lines.</p>
+  <pre class="code">#include &lt;erps/erps.h&gt;
+
+static int my_tx(void *user, erps_port_t port, const uint8_t *frame, size_t len);
+static int my_block(void *user, erps_port_t port, unsigned block_mask);
+static int my_flush(void *user);
+
+static const erps_ops_t ops = { .tx = my_tx, .set_port_state = my_block, .flush_fdb = my_flush };
+
+erps_config_t cfg;
+erps_config_init(&amp;cfg);
+cfg.raps_vid = 100;
+memcpy(cfg.node_id, system_mac, 6);
+cfg.role = ERPS_ROLE_RPL_OWNER;
+cfg.rpl_port = ERPS_PORT1;
+
+erps_t *e;
+if (erps_create(&amp;cfg, &amp;ops, my_ctx, &amp;e) != ERPS_OK) { ... }
+erps_start(e, now_us());
+
+<span class="c">/* event loop */</span>
+erps_rx_frame(e, port, frame, len, now_us());
+erps_set_signal_fail(e, port, link_is_down, now_us());
+if (now_us() &gt;= erps_next_deadline(e))
+    erps_poll(e, now_us());</pre>
+  <p class="read muted">Link with <code>pkg-config --cflags --libs erps</code> after <code>make install</code>. The <a href="api.html">C API reference</a> covers the contract of each call.</p>
+</section>
+
+<section id="linux">
+  <header><h2>Run it on Linux</h2></header>
+  <pre class="code">ip link add name br0 type bridge vlan_filtering 1
+ip link set eth1 master br0; ip link set eth2 master br0
+bridge vlan add dev eth1 vid 10; bridge vlan add dev eth2 vid 10
+
+cat &gt; /etc/erpsd.conf &lt;&lt;'EOF'
+erps ring R1 ring-id 1 raps-vid 100 port0 eth1 port1 eth2
+erps ring R1 node-id 02:00:00:00:00:01
+erps ring R1 protected-vlans 10
+erps ring R1 role owner rpl-port 1
+erps ring R1 enable
+EOF
+
+erpsd -c /etc/erpsd.conf &amp;
+erpsctl show erps
+erpsctl show erps ring R1 detail json</pre>
+  <p class="read muted">Keep the R-APS VLAN off the bridge: <code>erpsd</code> receives and forwards R-APS itself. Details are on the <a href="linux.html">Linux page</a>.</p>
+</section>
+
+<section id="layout">
+  <header><h2>Repository layout</h2></header>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+      <tbody>
+        <tr><td><code>include/erps/</code></td><td><code>erps.h</code> core API, <code>erps_pdu.h</code> R-APS codec, <code>erps_mgr.h</code> instance manager, <code>erps_cli.h</code> command layer, <code>erps_sim.h</code> simulator</td></tr>
+        <tr><td><code>src/core/</code></td><td><code>fsm.c</code> (Table 10-2), <code>priority.c</code>, <code>tx.c</code>, <code>flush.c</code>, <code>fop.c</code>, <code>erps.c</code>, <code>trace.c</code>, <code>pdu.c</code>, <code>mgr.c</code>, <code>config.c</code></td></tr>
+        <tr><td><code>src/cli/</code></td><td>Command layer</td></tr>
+        <tr><td><code>src/platform/</code></td><td><code>sim/</code> discrete-event ring simulator, <code>linux/</code> AF_PACKET and bridge netlink platform</td></tr>
+        <tr><td><code>apps/</code></td><td><code>erps-sim</code>, <code>erpsd</code>, <code>erpsctl</code></td></tr>
+        <tr><td><code>tests/</code></td><td><code>unit/</code>, <code>scenario/</code>, <code>chaos/</code>, <code>fuzz/</code>, <code>linux/</code></td></tr>
+        <tr><td><code>docs/</code></td><td>This site, plus Markdown references (API, design, conformance, Linux) and the G.8032 implementation notes</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>

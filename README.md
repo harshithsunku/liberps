@@ -1,5 +1,14 @@
 # liberps — ITU-T G.8032 Ethernet Ring Protection Switching in C
 
+[![CI](https://github.com/harshithsunku/liberps/actions/workflows/ci.yml/badge.svg)](https://github.com/harshithsunku/liberps/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-harshithsunku.github.io%2Fliberps-2d5f88?style=flat-square)](https://harshithsunku.github.io/liberps/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-2d5f88?style=flat-square)](LICENSE)
+[![C11](https://img.shields.io/badge/C11-no%20dependencies-b86e00?style=flat-square)](#embedding-the-library)
+
+**Documentation: [harshithsunku.github.io/liberps](https://harshithsunku.github.io/liberps/)**, covering
+getting started, the C API, the command reference, architecture, Linux deployment, G.8032 conformance and
+how it is tested.
+
 liberps implements **ITU-T G.8032/Y.1344 (03/2020) ERPS for a single ring** as a small, portable C11
 library. It is a deterministic state machine: you feed it frames, link state and operator commands, and it
 tells your dataplane what to do through four callbacks. It performs no I/O, reads no clock and spawns no threads,
@@ -182,6 +191,13 @@ apps/           erps-sim, erpsd, erpsctl
 tests/          unit/ scenario/ chaos/ fuzz/ linux/
 docs/           API.md DESIGN.md CONFORMANCE.md LINUX.md spec/NOTES.md
 ```
+
+## Documentation
+
+The site at [harshithsunku.github.io/liberps](https://harshithsunku.github.io/liberps/) is built from
+`tools/docsite/` into `docs/` (`python3 tools/docsite/build.py`) and published by `.github/workflows/pages.yml`.
+The same material is in Markdown in the repository: [API](docs/API.md), [design](docs/DESIGN.md),
+[conformance](docs/CONFORMANCE.md), [Linux](docs/LINUX.md) and the [G.8032 notes](docs/spec/NOTES.md).
 
 ## License
 

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G.8032 conformance — liberps</title>
+<meta name="description" content="Clause-by-clause mapping of G.8032 (03/2020) to the liberps implementation and tests, with every interpretation and its reason.">
+<meta property="og:title" content="G.8032 conformance — liberps">
+<meta property="og:description" content="Clause-by-clause mapping of G.8032 (03/2020) to the liberps implementation and tests, with every interpretation and its reason.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://harshithsunku.github.io/liberps/conformance.html">
+<meta name="theme-color" content="#0f161d">
+<script>try{var t=localStorage.getItem("liberps-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="frame">
+    <a class="brand" href="./"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="44 13" transform="rotate(-62 13 13)" style="color:var(--link)"/><path d="M8.6 4.6 L11.4 6.9" stroke="var(--block)" stroke-width="3" stroke-linecap="round"/></svg><span>liberps</span></a>
+    <nav class="nav" aria-label="Documentation">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="api.html">C API</a>
+      <a href="cli.html">Commands</a>
+      <a href="linux.html">Linux</a>
+      <a href="conformance.html" aria-current="page">Conformance</a>
+      <a href="quality.html">Quality</a>
+    </nav>
+    <div class="bar-right">
+      <a class="gh" href="https://github.com/harshithsunku/liberps">GitHub</a>
+      <button class="theme-btn" id="theme-toggle" type="button" aria-label="Toggle light or dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<main class="frame">
+<div class="page-head">
+  <p class="eyebrow">Conformance</p>
+  <h1>G.8032 (03/2020), clause by clause</h1>
+  <p class="lead">Where each requirement for a single ring is implemented and which tests exercise it, then every point the Recommendation leaves open and the choice made. This page is generated from <code>docs/CONFORMANCE.md</code>.</p>
+</div>
+
+<section id="matrix">
+  <header><h2>Clause matrix</h2></header>
+  <p class="read muted">Test names: FSM <code>tests/unit/test_fsm.c</code>, CORE <code>test_core.c</code>, PDU <code>test_pdu.c</code>, AUDIT <code>test_audit.c</code>; APP3, SW and MISC are <code>tests/scenario/test_app3.c</code>, <code>test_switch.c</code> and <code>test_misc.c</code>; CHAOS is <code>tests/chaos/test_chaos.c</code>.</p>
+<div class="tw"><table><thead><tr><th>Clause</th><th>Requirement</th><th>Implementation</th><th>Tests</th></tr></thead><tbody>
+<tr><td class="wrap">7.1</td><td class="wrap">SF / OK per ring link, monitoring method agnostic</td><td class="wrap"><code>erps_set_signal_fail</code> (erps.c)</td><td class="wrap">CORE, APP3</td></tr>
+<tr><td class="wrap">7.3</td><td class="wrap">&lt; 50 ms switching (no congestion, &lt; 16 nodes, &lt; 1200 km)</td><td class="wrap">Immediate Tx on change, 3-message burst at 3.33 ms, row actions synchronous with input</td><td class="wrap">sim timestamps (APP3: protection completes within ~1 ms of SF in the sim)</td></tr>
+<tr><td class="wrap">8</td><td class="wrap">SF, NR; FS, MS, Clear commands</td><td class="wrap"><code>erps_command</code>, priority.c</td><td class="wrap">CORE, SW</td></tr>
+<tr><td class="wrap">9.1</td><td class="wrap">revertive / non-revertive</td><td class="wrap"><code>revertive</code>; rows 20/29/30/36/43/44/57</td><td class="wrap">APP3 2/3, SW, AUDIT3</td></tr>
+<tr><td class="wrap">9.2</td><td class="wrap">protection switching triggers</td><td class="wrap">priority.c <code>evaluate()</code></td><td class="wrap">CORE</td></tr>
+<tr><td class="wrap">9.4</td><td class="wrap">traffic channel blocking per instance VIDs</td><td class="wrap"><code>set_port_state</code> contract (<code>ERPS_BLOCK_TRAFFIC</code>)</td><td class="wrap">FSM, Linux adapter</td></tr>
+<tr><td class="wrap">9.5</td><td class="wrap">R-APS channel blocking; Rx delivered to control even when blocked; local Tx on both ports; ring-ID filtering</td><td class="wrap"><code>ERPS_BLOCK_RAPS</code>, <code>sw_forward()</code> (erps.c), tx.c <code>send_both</code></td><td class="wrap">CORE <code>rx_pdu_api_and_sw_forwarding</code>, AUDIT9</td></tr>
+<tr><td class="wrap">9.6</td><td class="wrap">FDB flush per instance VIDs</td><td class="wrap"><code>flush_fdb</code> contract, flush.c coalescing</td><td class="wrap">CORE, APP3 1/5</td></tr>
+<tr><td class="wrap">9.7</td><td class="wrap">interconnection, sub-rings</td><td class="wrap"><strong>out of scope</strong></td><td class="wrap">—</td></tr>
+<tr><td class="wrap">10</td><td class="wrap">loop avoidance: unblock only if another block remains</td><td class="wrap">the whole state machine; tx held until blocks confirmed (AUDIT1)</td><td class="wrap">CHAOS P1 (300k seeds, no loop ever), sim invariant in every scenario</td></tr>
+<tr><td class="wrap">10.1</td><td class="wrap">RPL owner / neighbour MI; not both</td><td class="wrap"><code>role</code>, <code>rpl_port</code> (config.c)</td><td class="wrap">FSM row 1</td></tr>
+<tr><td class="wrap">10.1.1</td><td class="wrap">priority logic, Table 10-1; local SF ignored in FS; local clear SF vs other port; R-APS not stored; own node ID ignored; ring ID 1..239</td><td class="wrap">priority.c, <code>erps_req_type_t</code> order</td><td class="wrap">CORE <code>prio_*</code>, FSM</td></tr>
+<tr><td class="wrap">10.1.2</td><td class="wrap">Table 10-2, all 71 rows; actions a)–r); NodeState / PortState</td><td class="wrap">fsm.c <code>fsm_table</code> (row numbers), <code>erps_get_status</code></td><td class="wrap">FSM (every row and both branches; <code>all_71_rows_reachable</code>)</td></tr>
+<tr><td class="wrap">10.1.3</td><td class="wrap">Tx: burst of 3 on change, then every 5 s; Stop Tx; event messages parallel, burst only</td><td class="wrap">tx.c</td><td class="wrap">CORE <code>tx_*</code>, AUDIT7</td></tr>
+<tr><td class="wrap">10.1.4</td><td class="wrap">WTR 1–12 min (default 5); WTB = guard + 5 s; start does not restart; stop resets, no Expires; Clear stops</td><td class="wrap">fsm.c <code>start_wtr/stop_wtr/...</code>, config.c</td><td class="wrap">CORE <code>timer_*</code>, SW 7/9</td></tr>
+<tr><td class="wrap">10.1.5</td><td class="wrap">guard 10 ms–2 s (default 500 ms); blocks R-APS except Event</td><td class="wrap">erps.c <code>rx_common</code>, fsm.c <code>start_guard</code></td><td class="wrap">CORE <code>timer_guard_*</code>, MISC guard race</td></tr>
+<tr><td class="wrap">10.1.6</td><td class="wrap">validity check: request/state values, ring ID; Event+0000+0x00 = flush indication (10 ms)</td><td class="wrap">pdu.c <code>erps_pdu_decode</code>, erps.c <code>rx_common</code></td><td class="wrap">PDU, CORE <code>rx_validity_drops</code>, AUDIT11</td></tr>
+<tr><td class="wrap">10.1.7</td><td class="wrap">local defect logic</td><td class="wrap">erps.c <code>declare_sf/clear_sf</code></td><td class="wrap">CORE</td></tr>
+<tr><td class="wrap">10.1.8</td><td class="wrap">hold-off 0–10 s (default 0), report if still present</td><td class="wrap">erps.c <code>start_holdoff_or_declare</code>, <code>fire_one_timer</code></td><td class="wrap">CORE <code>timer_holdoff</code>, MISC hold-off</td></tr>
+<tr><td class="wrap">10.1.9</td><td class="wrap">local priority logic: Clear validity; command forgotten when overridden</td><td class="wrap">priority.c <code>erps__prio_command</code>, fsm.c <code>set_state</code> latch clearing</td><td class="wrap">CORE <code>cmd_*</code>, SW 8/11/12</td></tr>
+<tr><td class="wrap">10.1.10</td><td class="wrap">flush logic: (node ID, BPR) pairs, NR deletes, DNF / own ID, clear on block</td><td class="wrap">flush.c</td><td class="wrap">CORE <code>flush_logic_*</code>, APP3 1/5</td></tr>
+<tr><td class="wrap">10.1.11</td><td class="wrap">interconnection flush logic</td><td class="wrap"><strong>out of scope</strong></td><td class="wrap">—</td></tr>
+<tr><td class="wrap">10.1.12</td><td class="wrap">topology change propagation</td><td class="wrap"><strong>out of scope</strong></td><td class="wrap">—</td></tr>
+<tr><td class="wrap">10.1.13</td><td class="wrap">compatible version 1/2: FS/MS filtered, revertive forced</td><td class="wrap">priority.c, <code>erps__revertive()</code></td><td class="wrap">CORE <code>cmd_fs_rules_and_compat_v1</code>, SW 13</td></tr>
+<tr><td class="wrap">10.1.14</td><td class="wrap">R-APS block logic</td><td class="wrap">single ring: traffic and R-APS channels always blocked together; sub-ring branch out of scope</td><td class="wrap">FSM</td></tr>
+<tr><td class="wrap">10.2.1</td><td class="wrap">link SF behaviour (detecting and accepting nodes)</td><td class="wrap">rows 5/7/19/…</td><td class="wrap">APP3 1, MISC</td></tr>
+<tr><td class="wrap">10.2.2</td><td class="wrap">recovery; revertive (WTR) / non-revertive (Clear at owner)</td><td class="wrap">rows 20/29/66/58/70/71</td><td class="wrap">APP3 2/3/4</td></tr>
+<tr><td class="wrap">10.2.3</td><td class="wrap">MS: rules 1–3, clearing, WTB reversion</td><td class="wrap">rows 9/30/36/43/65; reject on rows 23/37/51</td><td class="wrap">SW 7/8/11, CORE <code>cmd_ms_rules</code></td></tr>
+<tr><td class="wrap">10.2.4</td><td class="wrap">FS: multiple FS allowed, clearing, WTB reversion</td><td class="wrap">rows 3/17/31/45/59/44/57</td><td class="wrap">SW 9/10, CORE</td></tr>
+<tr><td class="wrap">10.3</td><td class="wrap">R-APS PDU: OpCode 40, Version 1, Flags 0, TLV offset 32, R-APS info, End TLV, DA with ring ID</td><td class="wrap">pdu.c</td><td class="wrap">PDU (golden vector, round trip, every drop), fuzz_pdu</td></tr>
+<tr><td class="wrap">10.4</td><td class="wrap">FOP-PM (owner receives foreign NR,RB); FOP-TO (no R-APS for K cycles)</td><td class="wrap">fop.c</td><td class="wrap">CORE <code>fop_*</code>, MISC FOP-PM</td></tr>
+<tr><td class="wrap">App. III</td><td class="wrap">scenarios A–D</td><td class="wrap">—</td><td class="wrap">APP3 (all, incl. DNF / no-flush of scenario C)</td></tr>
+<tr><td class="wrap">App. IV</td><td class="wrap">timers, guard against outdated R-APS</td><td class="wrap">—</td><td class="wrap">MISC guard race, CHAOS</td></tr>
+<tr><td class="wrap">App. VIII</td><td class="wrap">flush optimisation; Table VIII.1 row 1 (WTB at start-up)</td><td class="wrap">flush optimisation <strong>not implemented</strong> (non-normative); row 1 variant available as <code>init_wtb</code></td><td class="wrap"><code>review_cold_start_wtr_vs_init_wtb</code>, CHAOS</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="interpretations">
+  <header><h2>Interpretations</h2></header>
+  <p class="read">The Recommendation leaves these points open, or reads two ways. Each entry gives the choice and the reason.</p>
+<ol class="plain read">
+<li><strong>When the state machine runs.</strong> It runs for every local event and for every R-APS that passes the validity check and the guard timer and outranks the persistent local requests. A persistent local request (latched FS/MS, SF, WTR/WTB running) that outranks a received R-APS, and has already been signalled, does not re-run its row. Re-running row 19 on every received R-APS(SF) would turn a stable (SF) into (SF,DNF), which contradicts Appendix III. The R-APS is counted as <code>rx_suppressed</code>.</li>
+<li><strong>Command latches.</strong> FS/MS are latched while the node is in state D/C and are forgotten when it leaves (§10.1.9). An MS that would hit a no-action row (23/37/51) is rejected with a notification rather than latched.</li>
+<li><strong>Re-evaluation.</strong> Persistent requests are re-evaluated after every state change. For example, an SF ignored in state D becomes the top request after Clear (row 44 → row 61).</li>
+<li><strong>Dual SF.</strong> Two failed ports are one "failed ring port" set.</li>
+<li><strong>BPR.</strong> BPR is the port the row is about if that port is blocked; otherwise the single blocked port; otherwise 0.</li>
+<li><strong>Tx Version</strong> follows <code>compatible_version</code>: 0x00 for 1, 0x01 for 2. <code>tx_version</code> overrides it.<ul class="plain"><li>§10.3 says this edition transmits 0x01. The compatibility MI exists so that 2008-only nodes, which send and expect version 0, can share the ring. Set <code>tx_version = 1</code> to follow §10.3 literally.</li></ul></li>
+<li><strong>Receive leniency.</strong> Any Version is accepted, Flags and the reserved fields are ignored, and TLV offset ≥ 32 is accepted. An End TLV is not required: only the 32 octets of R-APS information are read. This keeps forward-compatibility, as G.8013 asks of receivers.</li>
+<li><strong>Clear at the RPL owner</strong> is rejected in states C/D without a local command.<ul class="plain"><li>These states exist only while an MS/FS is in effect. Otherwise a periodic R-APS(SF) on no-op row 49 would make Clear "valid", row 44 would leave the owner Pending without WTB, and the ring would never revert.</li><li>The chaos test found this.</li></ul></li>
+<li><strong>Software R-APS forwarding</strong> forwards like a hardware R-APS_FF: independently of the local validity check, subject to MEG-level filtering (MEL ≥ ring MEL) and to channel blocking. Own frames are never forwarded.</li>
+<li><strong>Fail-safe dataplane.</strong> New R-APS information is not transmitted until the platform confirms every block the state machine asked for. A failed block is retried every 100 ms. Advertising (NR,RB) or (SF) while the block is not in place could let a peer unblock and close a loop.</li>
+<li><strong>FOP-TO is off by default.</strong><ul class="plain"><li>With an RPL neighbour configured, the owner's (NR,RB) is stopped at both RPL ends, so in Idle the ports facing the RPL legitimately receive nothing.</li><li>§10.4 excludes "when both ends are RB", but the detailed rule is in G.8021.</li><li>When enabled, FOP-TO is suppressed for SF ports and for the RPL port of the owner/neighbour in Idle.</li></ul></li>
+<li><strong>Restart (row 1)</strong> stops the guard timer, per the table. A node must therefore stay down longer than the ring's R-APS propagation time before restarting, as any real reboot does. The simulator and chaos test model this.</li>
+<li><strong>Row 71 applies to every node in Pending</strong>, including the RPL owner and neighbour. The table gives row 71 no role condition, unlike row 15, and Appendix III scenario C step E has the owner unblock on a higher node ID.<ul class="plain"><li>The node with the highest node ID therefore keeps the only block. A second independent review proposed restricting row 71 to non-RPL nodes. That would keep the owner's RPL block <em>and</em> the highest node's block, which segments the ring. The literal row is kept and pinned by <code>tests/scenario/test_review.c</code>.</li></ul></li>
+<li><strong>Cold start.</strong> Row 1 starts WTR at a revertive owner.<ul class="plain"><li>On a ring powered up together, the owner's RPL block plus the init block of the highest-ID node can split the ring for the whole WTR (5 min by default). This happens when that node is not the owner.</li><li><code>init_wtb</code> (CLI <code>init-timer wtb</code>) starts WTB instead, as in Appendix VIII Table VIII.1 row 1, so convergence takes guard + 5 s. It is off by default, to stay with normative Table 10-2.</li><li>A single node rebooting in a running ring is unaffected.</li></ul></li>
+<li><strong>Clear at the owner in Idle or Protection</strong> is accepted and runs no-action rows 2 / 16. Those rows exist for exactly this input (§10.1.9 b).</li>
+</ol>
+</section>
+
+<section id="limitations">
+  <header><h2>Known limitations</h2></header>
+<ul class="plain read">
+<li>Sub-rings and interconnection (§9.7, §10.1.11, §10.1.12, sub-ring R-APS block logic) are not implemented.</li>
+<li>Appendix VIII flush optimisation is not implemented (non-normative); only its row 1 start-up timer is offered, as <code>init_wtb</code>.</li>
+<li>FOP-TO approximates G.8021's dFOP-TO (see interpretation 11).</li>
+<li>Performance (§7.3, &lt; 50 ms) depends on the platform's SF detection, CPU trap latency and timer resolution. The library's processing is synchronous and O(1) per input.</li>
+</ul>
+</section>
+</main>
+<footer class="site">
+  <div class="frame">
+    <span>liberps · Apache-2.0 · <a href="https://github.com/harshithsunku/liberps">source on GitHub</a></span>
+    <span>G.8032/Y.1344 is © ITU. These pages are original documentation of this implementation.</span>
+  </div>
+</footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

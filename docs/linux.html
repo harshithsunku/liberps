@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linux daemon — liberps</title>
+<meta name="description" content="Deploy erpsd and erpsctl on Linux bridges: dataplane model, configuration, control protocol and the end-to-end test.">
+<meta property="og:title" content="Linux daemon — liberps">
+<meta property="og:description" content="Deploy erpsd and erpsctl on Linux bridges: dataplane model, configuration, control protocol and the end-to-end test.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://harshithsunku.github.io/liberps/linux.html">
+<meta name="theme-color" content="#0f161d">
+<script>try{var t=localStorage.getItem("liberps-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="frame">
+    <a class="brand" href="./"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="44 13" transform="rotate(-62 13 13)" style="color:var(--link)"/><path d="M8.6 4.6 L11.4 6.9" stroke="var(--block)" stroke-width="3" stroke-linecap="round"/></svg><span>liberps</span></a>
+    <nav class="nav" aria-label="Documentation">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="api.html">C API</a>
+      <a href="cli.html">Commands</a>
+      <a href="linux.html" aria-current="page">Linux</a>
+      <a href="conformance.html">Conformance</a>
+      <a href="quality.html">Quality</a>
+    </nav>
+    <div class="bar-right">
+      <a class="gh" href="https://github.com/harshithsunku/liberps">GitHub</a>
+      <button class="theme-btn" id="theme-toggle" type="button" aria-label="Toggle light or dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<main class="frame">
+<div class="page-head">
+  <p class="eyebrow">Linux</p>
+  <h1>erpsd on Linux bridges</h1>
+  <p class="lead"><code>erpsd</code> runs one or more ERP instances on Linux software bridges. <code>erpsctl</code> sends it commands over a Unix socket.</p>
+</div>
+
+<section id="model">
+  <header><h2>Dataplane model</h2></header>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Function</th><th>How erpsd does it</th></tr></thead>
+      <tbody>
+        <tr><td>Ring ports</td><td>Two ports of the same bridge, which must have <code>vlan_filtering</code> enabled (checked over rtnetlink)</td></tr>
+        <tr><td>Blocking a port (§9.4)</td><td>Remove the instance's protected VIDs from the port's bridge VLAN membership; unblocking adds them back as tagged members</td></tr>
+        <tr><td>R-APS (§9.5)</td><td>The R-APS VLAN is not configured on the bridge. A packet socket per ring port with a BPF filter for 01-19-A7-00-00-xx receives R-APS, recovering the VLAN tag from <code>PACKET_AUXDATA</code>; the core forwards it between ring ports in software</td></tr>
+        <tr><td>FDB flush (§9.6)</td><td>Netlink bulk delete of dynamic entries per ring port and protected VID (kernel 6.0 and later), with a dump-and-delete fallback</td></tr>
+        <tr><td>Signal fail</td><td>The port is down or has no carrier (<code>IFF_UP</code> and <code>IFF_LOWER_UP</code>), tracked through rtnetlink link events</td></tr>
+        <tr><td>Event loop</td><td>epoll over the packet sockets, rtnetlink, a timerfd armed to the earliest deadline, a signalfd and the control socket</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="read muted">It needs <code>CAP_NET_RAW</code> for the packet sockets and <code>CAP_NET_ADMIN</code> for VLAN and FDB changes.</p>
+</section>
+
+<section id="setup">
+  <header><h2>Set up a node</h2></header>
+  <pre class="code">ip link add name br0 type bridge vlan_filtering 1
+ip link set ring0 master br0
+ip link set ring1 master br0
+bridge vlan add dev ring0 vid 10
+bridge vlan add dev ring1 vid 10
+ip link set br0 up; ip link set ring0 up; ip link set ring1 up</pre>
+  <p class="read">Add each protected VID as a tagged member on both ring ports, and remove VLAN 1 from them if it is not protected. Use the same ring ID and R-APS VID on every node of a ring, and a distinct node ID on each node. Do not give the same protected VID to two instances on the same port.</p>
+</section>
+
+<section id="config">
+  <header><h2>Configure and run</h2></header>
+  <pre class="code"><span class="c"># /etc/erpsd.conf: one command per line</span>
+erps ring R1 ring-id 1 raps-vid 100 port0 ring0 port1 ring1
+erps ring R1 node-id 02:00:00:00:00:01
+erps ring R1 protected-vlans 10
+erps ring R1 role owner rpl-port 1
+erps ring R1 enable</pre>
+  <pre class="code">erpsd -c /etc/erpsd.conf -s /run/erpsd.sock -l notice
+erpsctl -s /run/erpsd.sock show erps summary json
+erpsctl -s /run/erpsd.sock erps ring R1 force-switch port 0
+erpsctl -s /run/erpsd.sock            <span class="c"># interactive, or a script on stdin</span></pre>
+  <dl class="defs">
+    <div><dt>Options</dt><dd><code>-c</code> configuration script (a failing line is reported by number), <code>-s</code> control socket (default <code>/run/erpsd.sock</code>, mode 0660), <code>-l</code> log level, <code>-n</code> leave VLAN membership as it is on exit.</dd></div>
+    <div><dt>Shutdown</dt><dd>On SIGINT or SIGTERM, <code>erpsd</code> removes protected VLANs from enabled ring ports by default, so no unprotected loop is left forwarding.</dd></div>
+    <div><dt>Node ID</dt><dd>Set it explicitly. With <code>node-id auto</code> the daemon uses the bridge's MAC when it can identify the bridge, otherwise the first non-loopback Ethernet MAC.</dd></div>
+  </dl>
+</section>
+
+<section id="protocol">
+  <header><h2>Control protocol</h2></header>
+  <p class="read">The control socket is a Unix stream socket. A client writes one command per line; the daemon replies with the command output followed by a trailer line made of the ASCII record separator (0x1E), the decimal result code and a newline. A connection may carry several commands. Requests are limited to 2048 bytes, and a client's pending output to 128 KiB.</p>
+</section>
+
+<section id="limits">
+  <header><h2>Limits</h2></header>
+  <ul class="plain read">
+    <li>Linux software bridges only; switch hardware needs its own platform adapter.</li>
+    <li>Netlink operations are synchronous with a five-second timeout, so a very large FDB flush pauses the event loop for that long at most.</li>
+    <li>FDB flushes are issued per ring port and protected VID; thousands of protected VLANs mean thousands of requests per flush.</li>
+    <li>The dump fallback for older kernels handles up to 8192 matching entries per flush.</li>
+    <li>A transmit on a port that is down or momentarily out of buffers counts as a lost frame, not a platform error. R-APS is deliberately sent on both ports even when one has failed.</li>
+  </ul>
+</section>
+
+<section id="e2e">
+  <header><h2>End-to-end test</h2></header>
+  <p class="read"><code>make e2e</code> needs no root. It runs <code>tests/linux/ring4.sh</code> in a user, network and mount namespace with sysfs remounted, builds four VLAN-filtering bridges joined by veth pairs into a ring, and starts one <code>erpsd</code> per bridge. It then checks:</p>
+  <ol class="plain read">
+    <li>Idle convergence, with VLAN 10 removed only at the two RPL ends</li>
+    <li>Broadcast traffic crosses the ring without a storm</li>
+    <li>A link failure leads to Protection with the RPL opened</li>
+    <li>Recovery leads, after WTR, back to Idle</li>
+    <li>No platform error on any node, and FDB flushes performed</li>
+    <li>Every daemon exits 0 on SIGTERM, reports nothing under AddressSanitizer, and leaves its ring ports blocked</li>
+  </ol>
+</section>
+</main>
+<footer class="site">
+  <div class="frame">
+    <span>liberps · Apache-2.0 · <a href="https://github.com/harshithsunku/liberps">source on GitHub</a></span>
+    <span>G.8032/Y.1344 is © ITU. These pages are original documentation of this implementation.</span>
+  </div>
+</footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

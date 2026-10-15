@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testing and quality — liberps</title>
+<meta name="description" content="How liberps is verified: unit, scenario, chaos, fuzz and Linux end-to-end tests, coverage, and independent conformance reviews.">
+<meta property="og:title" content="Testing and quality — liberps">
+<meta property="og:description" content="How liberps is verified: unit, scenario, chaos, fuzz and Linux end-to-end tests, coverage, and independent conformance reviews.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://harshithsunku.github.io/liberps/quality.html">
+<meta name="theme-color" content="#0f161d">
+<script>try{var t=localStorage.getItem("liberps-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="frame">
+    <a class="brand" href="./"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="44 13" transform="rotate(-62 13 13)" style="color:var(--link)"/><path d="M8.6 4.6 L11.4 6.9" stroke="var(--block)" stroke-width="3" stroke-linecap="round"/></svg><span>liberps</span></a>
+    <nav class="nav" aria-label="Documentation">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="api.html">C API</a>
+      <a href="cli.html">Commands</a>
+      <a href="linux.html">Linux</a>
+      <a href="conformance.html">Conformance</a>
+      <a href="quality.html" aria-current="page">Quality</a>
+    </nav>
+    <div class="bar-right">
+      <a class="gh" href="https://github.com/harshithsunku/liberps">GitHub</a>
+      <button class="theme-btn" id="theme-toggle" type="button" aria-label="Toggle light or dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<main class="frame">
+<div class="page-head">
+  <p class="eyebrow">Quality</p>
+  <h1>How liberps is verified</h1>
+  <p class="lead">Six kinds of evidence, each aimed at a different way an implementation of a ring protocol goes wrong: a row transcribed incorrectly, a scenario the spec describes, a race nobody thought of, malformed input, the real kernel, and a reader with fresh eyes.</p>
+</div>
+
+<section id="checks">
+  <header><h2>Checks</h2></header>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Check</th><th>What it covers</th><th>Result</th><th>Run it</th></tr></thead>
+      <tbody>
+        <tr><td>Unit tests</td><td>Every Table 10-2 row and both branches of each conditional row, against an independently re-derived row map; priority logic, timers, transmission, flush logic, validity check, FOP, manager, command layer, review regressions</td><td class="num"><span class="pill ok">86 pass</span></td><td><code>make test</code></td></tr>
+        <tr><td>Scenario tests</td><td>Written from the Recommendation by a separate author: Appendix III scenarios A–D, manual and forced switch rules, compatible-version 1, two-node ring, node failures, the guard-timer race of Appendix IV, one hour of stability, hold-off, cold start</td><td class="num"><span class="pill ok">24 pass</span></td><td><code>make test</code></td></tr>
+        <tr><td>Chaos property test</td><td>Rings of 2–16 nodes with random roles, timers, delay, jitter and loss, driven by random link failures (both directions or one), node failures and commands. Asserts no forwarding loop at any instant, convergence to Idle with only the RPL blocked, and no platform errors</td><td class="num"><span class="pill ok">300,000 seeds</span></td><td><code>ERPS_CHAOS_SEEDS=300000</code></td></tr>
+        <tr><td>Compiler and sanitizer matrix</td><td>gcc and clang, each plain and with AddressSanitizer and UndefinedBehaviorSanitizer, with <code>-Wall -Wextra -Wpedantic -Wconversion -Werror</code></td><td class="num"><span class="pill ok">all green</span></td><td><code>make check</code></td></tr>
+        <tr><td>Line coverage</td><td>Protocol core and command layer</td><td class="num"><span class="pill ok">95.4 % / 91.2 %</span></td><td><code>make cov</code></td></tr>
+        <tr><td>Fuzzing</td><td>PDU decoder; the instance receive path with fuzz-chosen configuration, frames, time, commands and injected platform failures, checking invariants after every step; simulator event sequences with the loop check; the command layer</td><td class="num"><span class="pill ok">~403 M runs</span></td><td><code>make fuzz</code></td></tr>
+        <tr><td>Linux end-to-end</td><td>Four <code>erpsd</code> on four kernel bridges in a ring: convergence, no storm, failure, reversion, clean shutdown; also under AddressSanitizer</td><td class="num"><span class="pill ok">pass</span></td><td><code>make e2e</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="read muted">CI runs the compiler matrix, a 20,000-seed chaos run, the simulator demo, the coverage gate and short fuzzing on every push.</p>
+</section>
+
+<section id="findings">
+  <header><h2>What the reviews and tests found</h2></header>
+  <p class="read">Two independent conformance reviews read the code against the Recommendation, one with GPT-6 through Codex and one with Gemini through Antigravity. Both confirmed the Table 10-2 transcription. Their findings, and those of the chaos test and the kernel run, are listed with their outcome; each fix has a regression test.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Source</th><th>Finding</th><th>Outcome</th></tr></thead>
+      <tbody>
+        <tr><td>Review 1</td><td>A port block that failed in hardware could still be advertised, letting a peer unblock and close a loop</td><td><span class="pill ok">fixed</span> new R-APS information waits for confirmed blocks</td></tr>
+        <tr><td>Review 1</td><td>Destroying an instance from inside a callback; a non-revertive switch leaving WTR armed; lost flushes; deadline wrap near the clock limit; Stop Tx leaving an event burst; out-of-spec Tx rates; software forwarding tied to local validity; restart keeping receive state</td><td><span class="pill ok">fixed</span></td></tr>
+        <tr><td>Review 1</td><td>FOP-TO off by default, lenient TLV offset on receive, version 0 in compatible-version 1</td><td><span class="pill doc">documented</span> deliberate choices</td></tr>
+        <tr><td>Chaos test</td><td>A Clear at the RPL owner while another node held a forced switch left the owner Pending with no timer, and the ring never reverted</td><td><span class="pill ok">fixed</span> Clear is not applicable at an owner in C or D</td></tr>
+        <tr><td>Kernel run</td><td>Bridge VLAN filtering was read from sysfs, which reflects the wrong network namespace</td><td><span class="pill ok">fixed</span> read over rtnetlink</td></tr>
+        <tr><td>Own review</td><td>A packet socket could queue frames from other interfaces before its bind; a send on a downed port counted as a platform fault</td><td><span class="pill ok">fixed</span></td></tr>
+        <tr><td>Review 2</td><td>Long VLAN lists were truncated in running-config; <code>erps_set_timers</code> lacked the re-entrancy guard</td><td><span class="pill ok">fixed</span></td></tr>
+        <tr><td>Review 2</td><td>Proposed restricting row 71 to non-RPL nodes</td><td><span class="pill no">kept literal</span> the change leaves two blocks and splits the ring</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="reproduce">
+  <header><h2>Reproduce a failure</h2></header>
+  <ul class="plain read">
+    <li>A chaos failure prints its seed and the command that replays it with the full event script and simulator log: <code>ERPS_CHAOS_SEED0=&lt;seed&gt; ERPS_CHAOS_SEEDS=1 ERPS_CHAOS_VERBOSE=1 build/gcc/test-chaos</code>.</li>
+    <li>Scenario tests log every simulator event with <code>ERPS_TEST_LOG=4</code> and write a capture with <code>ERPS_TEST_PCAP=file.pcap</code>.</li>
+    <li>Fuzzer crashes are saved as <code>fuzz-corpus/&lt;target&gt;-crash-*</code>; run the target binary on that file to replay it.</li>
+    <li>On a live system, <code>show erps ring &lt;name&gt; history</code> lists the last 128 Table 10-2 rows executed, and <code>debug erps level debug</code> logs each one as it runs.</li>
+  </ul>
+</section>
+</main>
+<footer class="site">
+  <div class="frame">
+    <span>liberps · Apache-2.0 · <a href="https://github.com/harshithsunku/liberps">source on GitHub</a></span>
+    <span>G.8032/Y.1344 is © ITU. These pages are original documentation of this implementation.</span>
+  </div>
+</footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

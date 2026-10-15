@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: toolchain
-        run: sudo apt-get update && sudo apt-get install -y clang
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang libclang-rt-18-dev
       - name: gcc + clang x {plain, ASan+UBSan} x {unit, scenario, chaos}
         run: make check
       - name: deep chaos (20k seeds)
@@ -28,11 +28,20 @@ jobs:
           make cov
           python3 tools/covsum.py build/gcc-cov src/core 95
 
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: docs site matches its sources and its links resolve
+        run: |
+          python3 tools/docsite/build.py --check
+          python3 .github/scripts/check_docs_links.py docs
+
   fuzz:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: toolchain
-        run: sudo apt-get update && sudo apt-get install -y clang
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang libclang-rt-18-dev
       - name: libFuzzer (60 s per target)
         run: make fuzz FUZZ_SECONDS=60

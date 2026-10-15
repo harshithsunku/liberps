@@ -227,8 +227,12 @@ int erps_trace_format(const erps_trace_t *t, char *buf, size_t len)
     erps_req_format(&t->req, req, sizeof req);
     ports_str(t->ports_before, pb);
     ports_str(t->ports_after, pa);
-    outf(&o, "#%u t=%s %c->%c row %u %s [", t->seq, ts, erps_state_letter(t->from),
-         erps_state_letter(t->to), t->row, req);
+    if (t->from == ERPS_STATE_INIT)
+        outf(&o, "#%u t=%s init->%c row %u %s [", t->seq, ts, erps_state_letter(t->to), t->row,
+             req);
+    else
+        outf(&o, "#%u t=%s %c->%c row %u %s [", t->seq, ts, erps_state_letter(t->from),
+             erps_state_letter(t->to), t->row, req);
     for (unsigned i = 0; i < t->n_actions; i++)
         outf(&o, "%s%s", i ? " " : "", erps_action_str((erps_action_t)t->actions[i]));
     outf(&o, "] ports %s->%s", pb, pa);
@@ -332,24 +336,32 @@ static void text_status(struct out *o, const erps_t *e)
 static void text_counters(struct out *o, const erps_t *e)
 {
     const erps_counters_t *c = &e->ctr;
-    outf(o, "  Counters:            port0      port1\n");
-    for (int k = 0; k < ERPS_MSG_COUNT; k++)
-        outf(o, "    rx %-8s %10llu %10llu\n", erps_msg_kind_str((erps_msg_kind_t)k),
-             (unsigned long long)c->port[0].rx_raps[k], (unsigned long long)c->port[1].rx_raps[k]);
-    for (int k = 0; k < ERPS_MSG_COUNT; k++)
-        outf(o, "    tx %-8s %10llu %10llu\n", erps_msg_kind_str((erps_msg_kind_t)k),
-             (unsigned long long)c->port[0].tx_raps[k], (unsigned long long)c->port[1].tx_raps[k]);
-    for (int k = 1; k < ERPS_DROP_COUNT; k++) {
-        if (c->port[0].rx_drop[k] || c->port[1].rx_drop[k])
-            outf(o, "    drop %-18s %10llu %10llu\n", erps_drop_str((erps_drop_t)k),
-                 (unsigned long long)c->port[0].rx_drop[k],
-                 (unsigned long long)c->port[1].rx_drop[k]);
+    /* one label column (24) and two right-aligned value columns (11) */
+    outf(o, "  Counters:%28s%11s\n", "port0", "port1");
+    char lbl[40];
+    for (int k = 0; k < ERPS_MSG_COUNT; k++) {
+        snprintf(lbl, sizeof lbl, "rx %s", erps_msg_kind_str((erps_msg_kind_t)k));
+        outf(o, "    %-24s%11llu%11llu\n", lbl, (unsigned long long)c->port[0].rx_raps[k],
+             (unsigned long long)c->port[1].rx_raps[k]);
     }
-    outf(o, "    forwarded          %10llu %10llu\n", (unsigned long long)c->port[0].sw_forwarded,
+    for (int k = 0; k < ERPS_MSG_COUNT; k++) {
+        snprintf(lbl, sizeof lbl, "tx %s", erps_msg_kind_str((erps_msg_kind_t)k));
+        outf(o, "    %-24s%11llu%11llu\n", lbl, (unsigned long long)c->port[0].tx_raps[k],
+             (unsigned long long)c->port[1].tx_raps[k]);
+    }
+    for (int k = 1; k < ERPS_DROP_COUNT; k++) {
+        if (!c->port[0].rx_drop[k] && !c->port[1].rx_drop[k])
+            continue;
+        snprintf(lbl, sizeof lbl, "drop %s", erps_drop_str((erps_drop_t)k));
+        outf(o, "    %-24s%11llu%11llu\n", lbl, (unsigned long long)c->port[0].rx_drop[k],
+             (unsigned long long)c->port[1].rx_drop[k]);
+    }
+    outf(o, "    %-24s%11llu%11llu\n", "forwarded", (unsigned long long)c->port[0].sw_forwarded,
          (unsigned long long)c->port[1].sw_forwarded);
-    outf(o, "    blocked/unblocked  %5llu/%-4llu %5llu/%-4llu\n",
-         (unsigned long long)c->port[0].blocked, (unsigned long long)c->port[0].unblocked,
-         (unsigned long long)c->port[1].blocked, (unsigned long long)c->port[1].unblocked);
+    outf(o, "    %-24s%11llu%11llu\n", "blocked", (unsigned long long)c->port[0].blocked,
+         (unsigned long long)c->port[1].blocked);
+    outf(o, "    %-24s%11llu%11llu\n", "unblocked", (unsigned long long)c->port[0].unblocked,
+         (unsigned long long)c->port[1].unblocked);
     outf(o,
          "    fsm-runs %llu, state-changes %llu, flushes %llu (requests %llu), rx own %llu, "
          "guard %llu, suppressed %llu\n",

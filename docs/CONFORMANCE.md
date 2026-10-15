@@ -47,7 +47,7 @@ Test files:
 | 10.4 | FOP-PM (owner receives foreign NR,RB); FOP-TO (no R-APS for K cycles) | fop.c | CORE `fop_*`, MISC FOP-PM |
 | App. III | scenarios A–D | — | APP3 (all, incl. DNF / no-flush of scenario C) |
 | App. IV | timers, guard against outdated R-APS | — | MISC guard race, CHAOS |
-| App. VIII | flush optimisation | **not implemented** (non-normative) | — |
+| App. VIII | flush optimisation; Table VIII.1 row 1 (WTB at start-up) | flush optimisation **not implemented** (non-normative); row 1 variant available as `init_wtb` | `review_cold_start_wtr_vs_init_wtb`, CHAOS |
 
 ## Interpretations
 
@@ -87,7 +87,6 @@ The Recommendation leaves these points open. Each choice and its reason (also in
 12. **Restart (row 1)** stops the guard timer, per the table. A node must therefore stay down longer than the
     ring's R-APS propagation time before restarting, as any real reboot does. The simulator and chaos test model
     this.
-
 13. **Row 71 applies to every node in Pending**, including the RPL owner and neighbour. The table
     gives row 71 no role condition, unlike row 15, and Appendix III scenario C step E has the owner
     unblock on a higher node ID.
@@ -108,7 +107,7 @@ The Recommendation leaves these points open. Each choice and its reason (also in
 ## Known limitations
 
 - Sub-rings and interconnection (§9.7, §10.1.11, §10.1.12, sub-ring R-APS block logic) are not implemented.
-- Appendix VIII flush optimisation is not implemented (non-normative).
+- Appendix VIII flush optimisation is not implemented (non-normative); only its row 1 start-up timer is offered, as `init_wtb`.
 - FOP-TO approximates G.8021's dFOP-TO (see interpretation 11).
 - Performance (§7.3, < 50 ms) depends on the platform's SF detection, CPU trap latency and timer resolution. The
   library's processing is synchronous and O(1) per input.

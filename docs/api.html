@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C API reference — liberps</title>
+<meta name="description" content="Reference for the liberps C API: configuration, platform callbacks, inputs, timers, introspection, the instance manager and the R-APS codec.">
+<meta property="og:title" content="C API reference — liberps">
+<meta property="og:description" content="Reference for the liberps C API: configuration, platform callbacks, inputs, timers, introspection, the instance manager and the R-APS codec.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://harshithsunku.github.io/liberps/api.html">
+<meta name="theme-color" content="#0f161d">
+<script>try{var t=localStorage.getItem("liberps-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="frame">
+    <a class="brand" href="./"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="44 13" transform="rotate(-62 13 13)" style="color:var(--link)"/><path d="M8.6 4.6 L11.4 6.9" stroke="var(--block)" stroke-width="3" stroke-linecap="round"/></svg><span>liberps</span></a>
+    <nav class="nav" aria-label="Documentation">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="api.html" aria-current="page">C API</a>
+      <a href="cli.html">Commands</a>
+      <a href="linux.html">Linux</a>
+      <a href="conformance.html">Conformance</a>
+      <a href="quality.html">Quality</a>
+    </nav>
+    <div class="bar-right">
+      <a class="gh" href="https://github.com/harshithsunku/liberps">GitHub</a>
+      <button class="theme-btn" id="theme-toggle" type="button" aria-label="Toggle light or dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<main class="frame">
+<div class="page-head">
+  <p class="eyebrow">C API</p>
+  <h1>C API reference</h1>
+  <p class="lead">The headers in <code>include/erps/</code> are the reference; this page explains how the pieces fit. All functions return <code>erps_err_t</code> (0 on success) unless noted.</p>
+</div>
+
+<section id="model">
+  <header><h2>Contract</h2></header>
+  <ul class="plain read">
+    <li>One <code>erps_t</code> is one ERP instance on one node. Distinct instances are independent.</li>
+    <li>Time is an input: every call takes <code>now</code>, a monotonic clock in microseconds (<code>erps_time_t</code>) with an arbitrary origin. A time earlier than a previous call is clamped and counted in <code>clock_backwards</code>.</li>
+    <li>An instance is not thread-safe. Serialise calls to it, typically from one event loop.</li>
+    <li>Callbacks run synchronously inside the call that caused them. They must not call back into the same instance (refused with <code>ERPS_E_BUSY</code>); <code>erps_destroy()</code> from a callback is deferred safely.</li>
+    <li>The library never blocks, sleeps or reads a clock, and allocates only in <code>erps_create()</code>.</li>
+  </ul>
+</section>
+
+<section id="lifecycle">
+  <header><h2>Lifecycle</h2></header>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Function</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>erps_config_init(&amp;cfg)</code></td><td>Fill a configuration with G.8032 defaults. You must still set <code>node_id</code> and <code>raps_vid</code>.</td></tr>
+        <tr><td><code>erps_config_validate(&amp;cfg, why, len)</code></td><td>Check ranges and consistency; writes a readable reason on error.</td></tr>
+        <tr><td><code>erps_create(&amp;cfg, &amp;ops, user, &amp;e)</code></td><td>Allocate and initialise an instance (not started).</td></tr>
+        <tr><td><code>erps_init_static(mem, len, &amp;cfg, &amp;ops, user, &amp;e)</code></td><td>Same in caller-provided memory of at least <code>erps_instance_size()</code> bytes.</td></tr>
+        <tr><td><code>erps_start(e, now)</code></td><td>Table 10-2 row 1: program both ports, start transmitting R-APS(NR).</td></tr>
+        <tr><td><code>erps_stop(e, now, block_ports)</code></td><td>Stop transmission and timers; with <code>block_ports</code>, block both ring ports first. Returns <code>ERPS_E_PLATFORM</code> if a block was not confirmed.</td></tr>
+        <tr><td><code>erps_destroy(e)</code></td><td>Release the instance. Does not touch the dataplane.</td></tr>
+        <tr><td><code>erps_set_timers(e, wtr, guard, holdoff)</code></td><td>Change timers at run time, validated.</td></tr>
+        <tr><td><code>erps_set_revertive(e, on)</code></td><td>Change the mode at run time. Going non-revertive cancels a running WTR or WTB.</td></tr>
+        <tr><td><code>erps_set_log_level(e, level)</code></td><td>Per-instance log level. At <code>ERPS_LOG_DEBUG</code> every executed row is logged.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="config">
+  <header><h2>Configuration</h2></header>
+  <p class="read muted">Timer ranges are enforced unless <code>relaxed_timers</code> is set, which accepts lab values such as a 10-second WTR.</p>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Field</th><th>Default</th><th>Range and meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>name</code></td><td><code>"erps"</code></td><td>Instance name in logs, traces and the command layer</td></tr>
+        <tr><td><code>ring_id</code></td><td>1</td><td>1–239; last octet of the R-APS destination 01-19-A7-00-00-xx (§10.1.1)</td></tr>
+        <tr><td><code>raps_vid</code></td><td>— (required)</td><td>1–4094; the dedicated R-APS VLAN (§9.5)</td></tr>
+        <tr><td><code>mel</code></td><td>7</td><td>0–7; ring MEG level</td></tr>
+        <tr><td><code>node_id[6]</code></td><td>— (required)</td><td>A unicast MAC unique to the node; also the default source MAC</td></tr>
+        <tr><td><code>port[2]</code></td><td>handles 0, 1</td><td><code>handle</code> (platform port id, used by the manager), <code>name</code>, <code>mac</code> (source MAC; all-zero uses <code>node_id</code>)</td></tr>
+        <tr><td><code>role</code>, <code>rpl_port</code></td><td>none, 0</td><td><code>ERPS_ROLE_NONE</code>, <code>_RPL_OWNER</code> or <code>_RPL_NEIGHBOUR</code>, and which port is on the RPL</td></tr>
+        <tr><td><code>revertive</code></td><td>true</td><td>Revertive operation (§9.1). Forced on by compatible-version 1</td></tr>
+        <tr><td><code>compat_version</code></td><td>2</td><td>1 filters FS and MS and forces revertive, for rings with 2008-only nodes (§10.1.13)</td></tr>
+        <tr><td><code>wtr_ms</code></td><td>300000</td><td>1–12 min in whole minutes (§10.1.4)</td></tr>
+        <tr><td><code>guard_ms</code></td><td>500</td><td>10–2000 ms in 10 ms steps (§10.1.5). WTB is always guard + 5 s</td></tr>
+        <tr><td><code>holdoff_ms</code></td><td>0</td><td>0–10 s in 100 ms steps (§10.1.8)</td></tr>
+        <tr><td><code>init_wtb</code></td><td>false</td><td>Owner starts WTB instead of WTR at initialisation (Appendix VIII, Table VIII.1); see <a href="conformance.html#interpretations">interpretation 14</a></td></tr>
+        <tr><td><code>relaxed_timers</code></td><td>false</td><td>Accept out-of-range timers and Tx timing</td></tr>
+        <tr><td><code>raps_pcp</code></td><td>7</td><td>802.1Q priority of transmitted R-APS</td></tr>
+        <tr><td><code>tx_version</code></td><td>auto</td><td>OAM Version field; auto sends 0 with compatible-version 1 and 1 otherwise</td></tr>
+        <tr><td><code>tx_interval_ms</code>, <code>tx_burst_us</code></td><td>5000, 3333</td><td>Continuous transmission period and burst spacing (§10.1.3)</td></tr>
+        <tr><td><code>sw_raps_forwarding</code></td><td>false</td><td>The instance forwards R-APS between its ring ports (software R-APS_FF)</td></tr>
+        <tr><td><code>fop_pm_enable</code></td><td>true</td><td>FOP-PM at the RPL owner (§10.4)</td></tr>
+        <tr><td><code>fop_to_enable</code>, <code>fop_timeout_ms</code></td><td>false, 17500</td><td>Per-port R-APS receive watchdog; the timeout also clears FOP-PM</td></tr>
+        <tr><td><code>history_depth</code></td><td>128</td><td>Transitions kept, up to <code>ERPS_HISTORY_MAX</code></td></tr>
+        <tr><td><code>log_level</code></td><td>notice</td><td><code>ERPS_LOG_ERR</code> … <code>ERPS_LOG_TRACE</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="ops">
+  <header><h2>Platform callbacks</h2></header>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Callback</th><th>Called when</th><th>The platform must</th></tr></thead>
+      <tbody>
+        <tr><td><code>tx(user, port, frame, len)</code></td><td>The instance transmits R-APS</td><td>Send the complete tagged frame (no FCS) on that ring port. Locally generated R-APS goes out on both ports even when one is blocked or failed (§9.5, §10.1.3).</td></tr>
+        <tr><td><code>set_port_state(user, port, mask)</code></td><td>A ring port is blocked or unblocked</td><td><code>mask</code> is <code>ERPS_BLOCK_TRAFFIC | ERPS_BLOCK_RAPS</code> or 0. Remove or restore the instance's protected VIDs on the port, and stop or allow forwarding of the R-APS VID through it. Return non-zero if the hardware refused; the call is retried every 100 ms and no new R-APS information is sent until it succeeds.</td></tr>
+        <tr><td><code>flush_fdb(user)</code></td><td>The topology changed</td><td>Flush MACs learned on both ring ports, for this instance's VIDs only (§9.6). A failure is retried.</td></tr>
+        <tr><td><code>notify(user, event)</code></td><td>Optional</td><td>Receive state changes (with the row), port changes, flushes, FOP-PM / FOP-TO raise and clear, rejected commands, signal-fail changes and platform errors.</td></tr>
+        <tr><td><code>log(user, level, msg)</code></td><td>Optional</td><td>Write a log line (no trailing newline).</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="inputs">
+  <header><h2>Inputs and time</h2></header>
+  <div class="tw">
+    <table>
+      <thead><tr><th>Function</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>erps_rx_frame(e, port, frame, len, now)</code></td><td>A received frame with its 802.1Q tag. Returns <code>ERPS_OK</code> if accepted as an R-APS for this instance, <code>ERPS_E_DROPPED</code> if the validity check discarded it (reason counted).</td></tr>
+        <tr><td><code>erps_rx_pdu(e, port, &amp;meta, pdu, len, now)</code></td><td>The same for platforms that strip the Ethernet header or tag: <code>meta</code> carries destination, source, VID and PCP.</td></tr>
+        <tr><td><code>erps_set_signal_fail(e, port, ssf, now)</code></td><td>Ring-port signal fail (carrier, CCM). SF is declared after the hold-off time if still present; clearing is immediate.</td></tr>
+        <tr><td><code>erps_command(e, cmd, port, now, &amp;why)</code></td><td><code>ERPS_CMD_FORCED_SWITCH</code>, <code>_MANUAL_SWITCH</code> (with a port) or <code>_CLEAR</code>. Returns <code>ERPS_E_REJECTED</code> with an <code>erps_reject_t</code> when the local priority logic refuses it.</td></tr>
+        <tr><td><code>erps_poll(e, now)</code></td><td>Fire due timers and transmissions, in deadline order.</td></tr>
+        <tr><td><code>erps_next_deadline(e)</code></td><td>The time by which <code>erps_poll()</code> must be called, or <code>ERPS_TIME_NEVER</code>.</td></tr>
+        <tr><td><code>erps_send_flush_event(e, now)</code></td><td>Send a burst of three R-APS Event (flush) messages, for diagnostics and interop tests.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="read muted">Command rejections: <code>COMPAT_V1</code> (FS or MS in compatible-version 1), <code>FS_ACTIVE</code> (a local FS exists), <code>HIGHER_PRIORITY</code> (local SF or FS outranks an MS), <code>MS_IN_RING</code> (an MS, FS or SF already exists in the ring), <code>CLEAR_NOT_APPLICABLE</code>, <code>NOT_RUNNING</code>.</p>
+</section>
+
+<section id="introspection">
+  <header><h2>Introspection</h2></header>
+  <pre class="code">erps_status_t st;   erps_get_status(e, &amp;st);     <span class="c">/* state, ports, top request, timers, Tx message, FOP */</span>
+erps_counters_t c;  erps_get_counters(e, &amp;c);    <span class="c">/* per port and kind Rx/Tx, drops by reason, flushes  */</span>
+erps_trace_t h[32]; size_t n = erps_get_history(e, h, 32);   <span class="c">/* oldest first */</span>
+uint8_t rows[9];    erps_get_row_coverage(e, rows);  <span class="c">/* bit r = Table 10-2 row r has run */</span>
+
+int need = erps_dump(e, ERPS_DUMP_ALL, ERPS_FMT_JSON, NULL, 0);   <span class="c">/* snprintf semantics */</span>
+char line[256];     erps_trace_format(&amp;h[0], line, sizeof line);</pre>
+  <p class="read">A history entry records the time, the triggering request (R-APS node ID, BPR and receiving port), the state transition, the Table 10-2 row, the actions in order and the port states before and after:</p>
+  <pre class="code">#4 t=301.001050 A-&gt;B row 7 R-APS(SF) 02:00:00:00:00:03 bpr0 @p0 [unblock-p1 stop-tx] ports -B-&gt;--</pre>
+  <p class="read muted">Every enum has a name function (<code>erps_state_str</code>, <code>erps_req_type_str</code>, <code>erps_drop_str</code>, <code>erps_reject_str</code>, <code>erps_strerror</code>, …) and messages and requests have formatters (<code>erps_raps_msg_format</code>, <code>erps_req_format</code>).</p>
+</section>
+
+<section id="mgr">
+  <header><h2>Several instances: <code>erps_mgr</code></h2></header>
+  <p class="read">A node usually runs several ERP instances on the same ring ports, each with its own R-APS VID and VLAN set. The manager owns them and does what an event loop needs:</p>
+  <pre class="code">erps_mgr_t *m = erps_mgr_create();
+erps_mgr_add(m, &amp;cfg, &amp;ops, user, &amp;e);           <span class="c">/* names unique; (ring ID, VID) unique per port */</span>
+erps_mgr_rx_frame(m, port_handle, frame, len, now); <span class="c">/* demultiplex by port, VID and ring ID */</span>
+erps_mgr_set_signal_fail(m, port_handle, ssf, now); <span class="c">/* fan out to every instance on the port */</span>
+erps_mgr_poll(m, now);
+erps_time_t next = erps_mgr_next_deadline(m);</pre>
+</section>
+
+<section id="pdu">
+  <header><h2>R-APS codec: <code>erps_pdu.h</code></h2></header>
+  <p class="read">The codec the core uses is public, for adapters and tools: <code>erps_eth_parse()</code> (up to two VLAN tags), <code>erps_pdu_decode()</code> (length, opcode 40, TLV offset, request and event validity), <code>erps_pdu_encode()</code>, <code>erps_frame_encode()</code> (a tagged frame padded to 60 octets), <code>erps_raps_dmac()</code>, <code>erps_msg_kind()</code> and <code>erps_node_id_cmp()</code>.</p>
+  <pre class="code"><span class="c">offset  field</span>
+0       DA 01-19-A7-00-00-&lt;ring id&gt;
+6       SA
+12      0x8100  PCP | DEI | VID (R-APS VID)
+16      0x8902  Ethernet OAM
+18      MEL(3) | Version(5)   OpCode 40   Flags 0   TLV offset 32
+22      Request/State(4) | Sub-code(4)
+23      Status: RB 0x80  DNF 0x40  BPR 0x20
+24      Node ID (6 octets)
+30      Reserved (24 octets)
+54      End TLV
+55      padding to 60 octets</pre>
+</section>
+</main>
+<footer class="site">
+  <div class="frame">
+    <span>liberps · Apache-2.0 · <a href="https://github.com/harshithsunku/liberps">source on GitHub</a></span>
+    <span>G.8032/Y.1344 is © ITU. These pages are original documentation of this implementation.</span>
+  </div>
+</footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

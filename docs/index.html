@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>liberps — G.8032 ring protection in C</title>
+<meta name="description" content="liberps implements ITU-T G.8032 Ethernet Ring Protection Switching for a single ring as a small, deterministic C11 library, with a command layer, a ring simulator and a Linux daemon.">
+<meta property="og:title" content="liberps — G.8032 ring protection in C">
+<meta property="og:description" content="liberps implements ITU-T G.8032 Ethernet Ring Protection Switching for a single ring as a small, deterministic C11 library, with a command layer, a ring simulator and a Linux daemon.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://harshithsunku.github.io/liberps/">
+<meta name="theme-color" content="#0f161d">
+<script>try{var t=localStorage.getItem("liberps-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="frame">
+    <a class="brand" href="./"><svg viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-dasharray="44 13" transform="rotate(-62 13 13)" style="color:var(--link)"/><path d="M8.6 4.6 L11.4 6.9" stroke="var(--block)" stroke-width="3" stroke-linecap="round"/></svg><span>liberps</span></a>
+    <nav class="nav" aria-label="Documentation">
+      <a href="getting-started.html">Get started</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="api.html">C API</a>
+      <a href="cli.html">Commands</a>
+      <a href="linux.html">Linux</a>
+      <a href="conformance.html">Conformance</a>
+      <a href="quality.html">Quality</a>
+    </nav>
+    <div class="bar-right">
+      <a class="gh" href="https://github.com/harshithsunku/liberps">GitHub</a>
+      <button class="theme-btn" id="theme-toggle" type="button" aria-label="Toggle light or dark theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+<main class="frame">
+<section class="hero" aria-label="Introduction">
+  <div class="hero-text">
+    <p class="eyebrow">ITU-T G.8032/Y.1344 (03/2020) · single ring · C11 · Apache-2.0</p>
+    <h1>liberps</h1>
+    <p class="lead">Ethernet Ring Protection Switching for one ring, as a small, deterministic C library. Received R-APS frames, link state and operator commands go in. Port blocks, R-APS transmissions and FDB flushes come out through callbacks you implement for your dataplane.</p>
+    <div class="actions">
+      <a class="btn primary" href="getting-started.html">Get started</a>
+      <a class="btn ghost" href="https://github.com/harshithsunku/liberps">View on GitHub</a>
+    </div>
+    <ul class="facts">
+      <li><b>71 / 71</b> Table 10-2 rows</li>
+      <li><b>86</b> unit and <b>24</b> scenario tests</li>
+      <li><b>300,000</b> random ring histories, no loop</li>
+      <li><b>~403 M</b> fuzz executions</li>
+    </ul>
+    <div class="badges">
+      <img alt="CI status" src="https://github.com/harshithsunku/liberps/actions/workflows/ci.yml/badge.svg">
+      <img alt="License Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-2d5f88?style=flat-square">
+      <img alt="Language C11" src="https://img.shields.io/badge/C11-no%20dependencies-b86e00?style=flat-square">
+    </div>
+  </div>
+  <div class="ring" aria-label="Interactive ring: Appendix III scenario A">
+    <div class="ring-head">
+      <span class="eyebrow">Appendix III, scenario A, on the simulator</span>
+      <div class="steps" role="group" aria-label="Scenario step">
+        <button type="button" data-step="idle" aria-pressed="true">Idle</button>
+        <button type="button" data-step="fail" aria-pressed="false">C–D fails</button>
+        <button type="button" data-step="pend" aria-pressed="false">Link recovers</button>
+        <button type="button" data-step="wtr" aria-pressed="false">WTR expires</button>
+      </div>
+    </div>
+<svg class="ringsvg" viewBox="-25 22 520 405" role="img" aria-label="Seven-node ring A to G; the RPL is the link between G and A">
+<line id="l0" class="lk" x1="295.1" y1="79.9" x2="376.2" y2="181.6"/>
+<g id="x0" class="xm" visibility="hidden"><circle cx="335.7" cy="130.7" r="9"/><path d="M331.7 126.7L339.7 134.7M339.7 126.7L331.7 134.7"/></g>
+<line id="l1" class="lk" x1="376.2" y1="181.6" x2="347.3" y2="308.5"/>
+<g id="x1" class="xm" visibility="hidden"><circle cx="361.8" cy="245.1" r="9"/><path d="M357.8 241.1L365.8 249.1M365.8 241.1L357.8 249.1"/></g>
+<line id="l2" class="lk" x1="347.3" y1="308.5" x2="230.0" y2="365.0"/>
+<g id="x2" class="xm" visibility="hidden"><circle cx="288.6" cy="336.8" r="9"/><path d="M284.6 332.8L292.6 340.8M292.6 332.8L284.6 340.8"/></g>
+<line id="l3" class="lk" x1="230.0" y1="365.0" x2="112.7" y2="308.5"/>
+<g id="x3" class="xm" visibility="hidden"><circle cx="171.4" cy="336.8" r="9"/><path d="M167.4 332.8L175.4 340.8M175.4 332.8L167.4 340.8"/></g>
+<line id="l4" class="lk" x1="112.7" y1="308.5" x2="83.8" y2="181.6"/>
+<g id="x4" class="xm" visibility="hidden"><circle cx="98.2" cy="245.1" r="9"/><path d="M94.2 241.1L102.2 249.1M102.2 241.1L94.2 249.1"/></g>
+<line id="l5" class="lk" x1="83.8" y1="181.6" x2="164.9" y2="79.9"/>
+<g id="x5" class="xm" visibility="hidden"><circle cx="124.3" cy="130.7" r="9"/><path d="M120.3 126.7L128.3 134.7M128.3 126.7L120.3 134.7"/></g>
+<line id="l6" class="lk" x1="164.9" y1="79.9" x2="295.1" y2="79.9"/>
+<g id="x6" class="xm" visibility="hidden"><circle cx="230.0" cy="79.9" r="9"/><path d="M226.0 75.9L234.0 83.9M234.0 75.9L226.0 83.9"/></g>
+<text class="rpl-l" x="230.0" y="65.9" text-anchor="middle">RPL</text>
+<line id="b0-1" class="blk" x1="323.5" y1="99.4" x2="307.8" y2="111.9"/>
+<line id="b0-0" class="blk on" x1="262.1" y1="89.9" x2="262.1" y2="69.9"/>
+<line id="b1-1" class="blk" x1="378.6" y1="216.0" x2="359.1" y2="211.6"/>
+<line id="b1-0" class="blk" x1="347.8" y1="162.1" x2="363.5" y2="149.6"/>
+<line id="b2-1" class="blk" x1="321.9" y1="331.9" x2="313.2" y2="313.8"/>
+<line id="b2-0" class="blk" x1="344.9" y1="274.1" x2="364.4" y2="278.6"/>
+<line id="b3-1" class="blk" x1="195.9" y1="359.7" x2="204.6" y2="341.7"/>
+<line id="b3-0" class="blk" x1="255.4" y1="341.7" x2="264.1" y2="359.7"/>
+<line id="b4-1" class="blk" x1="95.6" y1="278.6" x2="115.1" y2="274.1"/>
+<line id="b4-0" class="blk" x1="146.8" y1="313.8" x2="138.1" y2="331.9"/>
+<line id="b5-1" class="blk" x1="96.5" y1="149.6" x2="112.2" y2="162.1"/>
+<line id="b5-0" class="blk" x1="100.9" y1="211.6" x2="81.4" y2="216.0"/>
+<line id="b6-1" class="blk on" x1="197.9" y1="69.9" x2="197.9" y2="89.9"/>
+<line id="b6-0" class="blk" x1="152.2" y1="111.9" x2="136.5" y2="99.4"/>
+<g class="nd"><circle cx="295.1" cy="79.9" r="22"/><text class="nn" x="295.1" y="84.9" text-anchor="middle">A</text></g>
+<text class="nid" x="314.2" y="44.2" text-anchor="start">ID 81 · neighbour</text>
+<g class="nd"><circle cx="376.2" cy="181.6" r="22"/><text class="nn" x="376.2" y="186.6" text-anchor="middle">B</text></g>
+<text class="nid" x="419.1" y="175.8" text-anchor="start">ID 26</text>
+<g class="nd"><circle cx="347.3" cy="308.5" r="22"/><text class="nn" x="347.3" y="313.5" text-anchor="middle">C</text></g>
+<text class="nid" x="381.7" y="340.0" text-anchor="start">ID 89</text>
+<g class="nd"><circle cx="230.0" cy="365.0" r="22"/><text class="nn" x="230.0" y="370.0" text-anchor="middle">D</text></g>
+<text class="nid" x="230.0" y="413.0" text-anchor="middle">ID 62</text>
+<g class="nd"><circle cx="112.7" cy="308.5" r="22"/><text class="nn" x="112.7" y="313.5" text-anchor="middle">E</text></g>
+<text class="nid" x="78.3" y="340.0" text-anchor="end">ID 71</text>
+<g class="nd"><circle cx="83.8" cy="181.6" r="22"/><text class="nn" x="83.8" y="186.6" text-anchor="middle">F</text></g>
+<text class="nid" x="40.9" y="175.8" text-anchor="end">ID 31</text>
+<g class="nd"><circle cx="164.9" cy="79.9" r="22"/><text class="nn" x="164.9" y="84.9" text-anchor="middle">G</text></g>
+<text class="nid" x="145.8" y="44.2" text-anchor="end">ID 75 · owner</text>
+</svg>
+    <div class="legend"><span><i class="sw l"></i>ring link</span><span><i class="sw"></i>blocked port</span><span><i class="sw f"></i>failed link</span></div>
+    <p class="ring-state" id="ring-state" aria-live="polite"><b>Idle (A)</b> on every node. RPL blocked at both ends.</p>
+    <pre class="log" id="ring-log">300.000  G  Pending -&gt; Idle      row 66  WTR expires: Tx R-APS(NR,RB,DNF)
+300.000  A..F  Pending -&gt; Idle   row 70  R-APS(NR,RB)
+         A keeps its RPL end blocked (neighbour)
+         G repeats R-APS(NR,RB) every 5 s</pre>
+  </div>
+</section>
+
+<section>
+  <header>
+    <p class="eyebrow">What you get</p>
+    <h2>The whole protocol, and the tools around it</h2>
+  </header>
+  <div class="cols3">
+    <div>
+      <h3>The state machine, row by row</h3>
+      <p class="muted">All 71 rows of Table 10-2 are transcribed with the Recommendation's row numbers, so every transition in a trace can be checked against the standard. Priority logic, WTR, WTB, guard and hold-off timers, flush logic with DNF, FOP alarms and compatible-version 1 are all included.</p>
+    </div>
+    <div>
+      <h3>Pure and pluggable</h3>
+      <p class="muted">The core does no I/O, reads no clock and starts no threads. You pass the time with each call and implement three callbacks. The same library runs on a switch NOS, a Linux bridge or a simulator, with no allocation after creation.</p>
+    </div>
+    <div>
+      <h3>Built to be debugged</h3>
+      <p class="muted">Every executed row is recorded with its trigger, actions and port states. Counters cover each message kind and every drop reason. Status, counters and history are available as text or JSON, and the simulator writes pcap.</p>
+    </div>
+    <div>
+      <h3>A command layer for any CLI</h3>
+      <p class="muted"><code>erps_cli_exec()</code> runs configuration, operator commands and <code>show</code> views from a text line, and exports its grammar for host CLI frameworks. A configuration file is a command script.</p>
+    </div>
+    <div>
+      <h3>A ring simulator</h3>
+      <p class="muted"><code>erps-sim</code> runs rings of any size on a virtual clock with link delay, loss, one-way failures and node failures, checking for forwarding loops after every event.</p>
+    </div>
+    <div>
+      <h3>A Linux daemon</h3>
+      <p class="muted"><code>erpsd</code> runs the protocol on kernel bridges, blocking by VLAN membership and flushing the FDB over netlink; <code>erpsctl</code> controls it.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <header>
+    <p class="eyebrow">Quick start</p>
+    <h2>Build it and watch a ring protect itself</h2>
+  </header>
+  <pre class="code">git clone https://github.com/harshithsunku/liberps && cd liberps
+make                                           <span class="c"># library, erps-sim, erpsd, erpsctl, examples</span>
+make test                                      <span class="c"># unit, scenario and chaos tests</span>
+build/cc/erps-sim -f examples/appendix3.erps   <span class="c"># the scenario shown above, with every row</span></pre>
+</section>
+
+<section>
+  <header>
+    <p class="eyebrow">Next</p>
+    <h2>Where to go from here</h2>
+  </header>
+  <div class="next">
+    <a href="getting-started.html"><h4>Get started</h4><span>Build, test, simulate, embed.</span></a>
+    <a href="api.html"><h4>C API</h4><span>Config, callbacks, inputs, introspection.</span></a>
+    <a href="architecture.html"><h4>Architecture</h4><span>How the control process is put together.</span></a>
+    <a href="conformance.html"><h4>Conformance</h4><span>Every clause, test and interpretation.</span></a>
+  </div>
+</section>
+</main>
+<footer class="site">
+  <div class="frame">
+    <span>liberps · Apache-2.0 · <a href="https://github.com/harshithsunku/liberps">source on GitHub</a></span>
+    <span>G.8032/Y.1344 is © ITU. These pages are original documentation of this implementation.</span>
+  </div>
+</footer>
+<script src="assets/docs.js"></script>
+</body>
+</html>

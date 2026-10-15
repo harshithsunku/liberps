@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/**
+      - tools/docsite/**
+      - .github/scripts/check_docs_links.py
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  # The site is plain static HTML committed under docs/ (built from tools/docsite).
+  # Check it is up to date and its links resolve, then publish the directory as-is.
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Site matches its sources
+        run: python3 tools/docsite/build.py --check
+      - name: Internal links and assets resolve
+        run: python3 .github/scripts/check_docs_links.py docs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
