@@ -185,3 +185,17 @@ TEST(audit13_restart_resets_rx_diagnostics)
     CHECK(!st.port[1].flush_pair_valid);
     mock_free(m);
 }
+
+/* ---- second independent review (agy) --------------------------------------------------------- */
+
+/* review2-3: erps_set_timers from inside a callback is refused like every other mutator */
+TEST(review2_set_timers_reentrancy)
+{
+    struct mock *m = mock_started(ERPS_ROLE_NONE, ERPS_PORT0);
+    rx(m, ERPS_PORT1, ERPS_RAPS_NR, true, false, 1, 0x70);
+    m->reenter_timers = 1;
+    erps_set_signal_fail(m->e, ERPS_PORT0, true, m->now); /* tx() calls erps_set_timers() */
+    CHECK_EQ(m->reenter_rc, ERPS_E_BUSY);
+    CHECK_EQ(m->e->cfg.wtr_ms, 300000); /* unchanged */
+    mock_free(m);
+}

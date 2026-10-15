@@ -39,6 +39,7 @@ struct mock {
     int fail_set_port; /* number of set_port_state calls to fail */
     int fail_tx;
     int reenter;       /* call erps_poll from inside tx() */
+    int reenter_timers; /* call erps_set_timers from inside tx() */
     int destroy_on_event; /* call erps_destroy from inside notify() */
     int fail_flush;
     erps_err_t reenter_rc;
@@ -51,6 +52,10 @@ static int mock_tx_cb(void *user, erps_port_t port, const uint8_t *frame, size_t
     if (m->reenter) {
         m->reenter_rc = erps_poll(m->e, m->now);
         m->reenter = 0;
+    }
+    if (m->reenter_timers) {
+        m->reenter_rc = erps_set_timers(m->e, 60000, 500, 0);
+        m->reenter_timers = 0;
     }
     if (m->fail_tx) {
         m->fail_tx--;

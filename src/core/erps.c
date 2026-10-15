@@ -296,6 +296,8 @@ erps_err_t erps_set_timers(erps_t *e, uint32_t wtr_ms, uint32_t guard_ms, uint32
 {
     if (!e || e->magic != ERPS_MAGIC)
         return ERPS_E_INVAL;
+    if (e->depth)
+        return ERPS_E_BUSY;
     erps_config_t c = e->cfg;
     c.wtr_ms = wtr_ms;
     c.guard_ms = guard_ms;

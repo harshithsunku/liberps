@@ -692,8 +692,12 @@ void erps__fsm_init(erps_t *e)
         block_rpl(e);
         unblock_non_rpl(e);
         tx(e, ERPS_RAPS_NR, false, false, e->cfg.rpl_port);
-        if (erps__revertive(e))
-            start_wtr(e);
+        if (erps__revertive(e)) {
+            if (e->cfg.init_wtb)
+                start_wtb(e); /* App. VIII Table VIII.1 row 1 (opt-in) */
+            else
+                start_wtr(e);
+        }
     } else if (erps__is_neighbour(e)) {
         block_rpl(e);
         unblock_non_rpl(e);

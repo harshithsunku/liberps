@@ -67,7 +67,10 @@ static const erps_cli_cmd_t commands[] = {
     { "erps ring <name> compat-version <1|2>", "G.8032v1 interworking (default 2)" },
     { "erps ring <name> timers [wtr <dur>] [guard <dur>] [holdoff <dur>]",
       "WTR 1-12 min, guard 10ms-2s, hold-off 0-10s" },
-    { "erps ring <name> protected-vlans <list>", "VLANs protected by the instance, e.g. 10-20,30" },
+    { "erps ring <name> protected-vlans [add|remove] <list>",
+      "VLANs protected by the instance, e.g. 10-20,30" },
+    { "erps ring <name> init-timer wtr|wtb",
+      "owner timer at start-up: wtr (Table 10-2) or wtb (App. VIII, faster cold start)" },
     { "erps ring <name> pcp <0-7>", "802.1Q priority of transmitted R-APS" },
     { "erps ring <name> sw-forwarding on|off", "forward R-APS between ring ports in software" },
     { "erps ring <name> fop-pm on|off | fop-to on|off | fop-timeout <dur>",
@@ -275,9 +278,15 @@ static bool parse_vlans(const char *s, erps_cli_ring_extra_t *x)
     return true;
 }
 
-static void fmt_vlans(const erps_cli_ring_extra_t *x, char *b, size_t n)
+/* Format the VLAN set as ranges, split into chunks short enough for one command line each
+ * (a fragmented set can need ~10 KB). Calls emit(chunk, first) per chunk; returns the number of
+ * chunks (0 = empty set). */
+static int fmt_vlans(const erps_cli_ring_extra_t *x, void (*emit)(void *, const char *, bool),
+                     void *ctx)
 {
+    char b[1024];
     size_t pos = 0;
+    int chunks = 0;
     b[0] = '\0';
     for (unsigned v = 1; v <= 4094; v++) {
         if (!erps_cli_vlan_test(x, v))
@@ -285,18 +294,25 @@ static void fmt_vlans(const erps_cli_ring_extra_t *x, char *b, size_t n)
         unsigned w = v;
         while (w + 1 <= 4094 && erps_cli_vlan_test(x, w + 1))
             w++;
-        int k = (w == v) ? snprintf(b + pos, pos < n ? n - pos : 0, "%s%u", pos ? "," : "", v)
-                         : snprintf(b + pos, pos < n ? n - pos : 0, "%s%u-%u", pos ? "," : "", v, w);
-        if (k < 0 || pos + (size_t)k >= n) {
-            if (n > 4)
-                snprintf(b + n - 4, 4, "...");
-            return;
+        char item[16];
+        if (w == v)
+            snprintf(item, sizeof item, "%u", v);
+        else
+            snprintf(item, sizeof item, "%u-%u", v, w);
+        if (pos + strlen(item) + 2 > sizeof b - 1) {
+            emit(ctx, b, chunks == 0);
+            chunks++;
+            pos = 0;
+            b[0] = '\0';
         }
-        pos += (size_t)k;
+        pos += (size_t)snprintf(b + pos, sizeof b - pos, "%s%s", pos ? "," : "", item);
         v = w;
     }
-    if (!pos)
-        snprintf(b, n, "none");
+    if (pos) {
+        emit(ctx, b, chunks == 0);
+        chunks++;
+    }
+    return chunks;
 }
 
 static bool parse_onoff(const char *s, bool *out)
@@ -584,8 +600,29 @@ static erps_err_t ring_config(erps_cli_t *cli, struct ring *r, char **t, int n, 
             restart_needed = true;
         } else if (!strcmp(k, "protected-vlans")) {
             NEED_VALUE();
-            if (!parse_vlans(v, &x))
+            /* protected-vlans <list> replaces; protected-vlans add|remove <list> edits */
+            if (!strcmp(v, "add") || !strcmp(v, "remove")) {
+                const char *op = v;
+                v = i + 1 < n ? t[i + 1] : NULL;
+                NEED_VALUE();
+                erps_cli_ring_extra_t delta;
+                if (!parse_vlans(v, &delta))
+                    return fail(o, ERPS_E_INVAL, "protected-vlans %s: bad list '%s'", op, v);
+                for (size_t j = 0; j < sizeof x.vlans; j++)
+                    x.vlans[j] = op[0] == 'a' ? (uint8_t)(x.vlans[j] | delta.vlans[j])
+                                              : (uint8_t)(x.vlans[j] & ~delta.vlans[j]);
+            } else if (!parse_vlans(v, &x)) {
                 return fail(o, ERPS_E_INVAL, "protected-vlans: bad list '%s' (e.g. 10-20,30)", v);
+            }
+            restart_needed = true;
+        } else if (!strcmp(k, "init-timer")) {
+            NEED_VALUE();
+            if (!strcmp(v, "wtb"))
+                c.init_wtb = true;
+            else if (!strcmp(v, "wtr"))
+                c.init_wtb = false;
+            else
+                return fail(o, ERPS_E_INVAL, "init-timer must be wtr or wtb");
             restart_needed = true;
         } else if (!strcmp(k, "sw-forwarding") || !strcmp(k, "fop-pm") || !strcmp(k, "fop-to") ||
                    !strcmp(k, "relaxed-timers")) {
@@ -684,6 +721,17 @@ static void show_summary(erps_cli_t *cli, struct out *o, bool json)
         outf(o, "(no rings configured)\n");
 }
 
+struct vlan_emit {
+    struct out *o;
+    const char *ring;
+};
+
+static void emit_vlan_line(void *ctx, const char *chunk, bool first)
+{
+    struct vlan_emit *ve = ctx;
+    outf(ve->o, "erps ring %s protected-vlans %s%s\n", ve->ring, first ? "" : "add ", chunk);
+}
+
 static void running_config(erps_cli_t *cli, struct out *o)
 {
     for (size_t i = 0; i < cli->n; i++) {
@@ -713,14 +761,14 @@ static void running_config(erps_cli_t *cli, struct out *o)
         outf(o, "erps ring %s timers wtr %s guard %s holdoff %s\n", nm, w, g, h);
         if (!c->revertive)
             outf(o, "erps ring %s non-revertive\n", nm);
+        if (c->init_wtb)
+            outf(o, "erps ring %s init-timer wtb\n", nm);
         if (c->compat_version != 2)
             outf(o, "erps ring %s compat-version %u\n", nm, c->compat_version);
         if (c->raps_pcp != 7)
             outf(o, "erps ring %s pcp %u\n", nm, c->raps_pcp);
-        char vl[512];
-        fmt_vlans(&r->x, vl, sizeof vl);
-        if (strcmp(vl, "none"))
-            outf(o, "erps ring %s protected-vlans %s\n", nm, vl);
+        struct vlan_emit ve = { o, nm };
+        fmt_vlans(&r->x, emit_vlan_line, &ve);
         if (c->sw_raps_forwarding)
             outf(o, "erps ring %s sw-forwarding on\n", nm);
         if (!c->fop_pm_enable)

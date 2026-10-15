@@ -88,6 +88,23 @@ The Recommendation leaves these points open. Each choice and its reason (also in
     ring's R-APS propagation time before restarting, as any real reboot does. The simulator and chaos test model
     this.
 
+13. **Row 71 applies to every node in Pending**, including the RPL owner and neighbour. The table
+    gives row 71 no role condition, unlike row 15, and Appendix III scenario C step E has the owner
+    unblock on a higher node ID.
+    - The node with the highest node ID therefore keeps the only block. A second independent
+      review proposed restricting row 71 to non-RPL nodes. That would keep the owner's RPL block
+      *and* the highest node's block, which segments the ring. The literal row is kept and pinned
+      by `tests/scenario/test_review.c`.
+14. **Cold start.** Row 1 starts WTR at a revertive owner.
+    - On a ring powered up together, the owner's RPL block plus the init block of the
+      highest-ID node can split the ring for the whole WTR (5 min by default). This happens when
+      that node is not the owner.
+    - `init_wtb` (CLI `init-timer wtb`) starts WTB instead, as in Appendix VIII Table VIII.1 row 1,
+      so convergence takes guard + 5 s. It is off by default, to stay with normative Table 10-2.
+    - A single node rebooting in a running ring is unaffected.
+15. **Clear at the owner in Idle or Protection** is accepted and runs no-action rows 2 / 16. Those
+    rows exist for exactly this input (§10.1.9 b).
+
 ## Known limitations
 
 - Sub-rings and interconnection (§9.7, §10.1.11, §10.1.12, sub-ring R-APS block logic) are not implemented.

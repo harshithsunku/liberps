@@ -110,6 +110,7 @@ static int one_seed(uint64_t seed, bool verbose)
     c.seed = seed;
     c.node_template.revertive = r.revertive;
     c.node_template.holdoff_ms = below(4) == 0 ? 100u * below(5) : 0;
+    c.node_template.init_wtb = below(2) == 0;
     erps_sim_t *s = erps_sim_create(&c);
     if (!s)
         return -1;

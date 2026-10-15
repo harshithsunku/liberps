@@ -362,3 +362,42 @@ TEST(cli_views_and_misc_paths)
     CHECK_EQ(erps_cli_exec(bare, "erps ring X enable", cap_out, &c), ERPS_E_UNSUPPORTED);
     erps_cli_destroy(bare);
 }
+
+/* review2-2: a fragmented VLAN set (every odd VID) must survive show running-config -> replay */
+TEST(cli_running_config_long_vlan_list_round_trip)
+{
+    struct fake f, f2;
+    struct capture *c = calloc(1, sizeof *c), *c2 = calloc(1, sizeof *c2);
+    REQUIRE(c && c2);
+    erps_cli_t *cli = new_cli(&f);
+    CHECK_EQ(run(cli, c, "erps ring R1 ring-id 1 raps-vid 4094 port0 eth1 port1 eth2"), ERPS_OK);
+    CHECK_EQ(run(cli, c, "erps ring R1 protected-vlans 1-2"), ERPS_OK);
+    for (unsigned v = 3; v <= 4093; v += 2) {
+        char cmd[64];
+        snprintf(cmd, sizeof cmd, "erps ring R1 protected-vlans add %u", v);
+        REQUIRE(run(cli, c, cmd) == ERPS_OK);
+    }
+    CHECK_EQ(run(cli, c, "erps ring R1 protected-vlans remove 2"), ERPS_OK);
+    CHECK_EQ(run(cli, c, "erps ring R1 init-timer wtb"), ERPS_OK);
+    const erps_cli_ring_extra_t *x = erps_cli_ring_extra(cli, "R1");
+    REQUIRE(x);
+    CHECK(erps_cli_vlan_test(x, 1) && !erps_cli_vlan_test(x, 2) && erps_cli_vlan_test(x, 4093));
+    CHECK_EQ(run(cli, c, "show running-config erps"), ERPS_OK);
+    CHECK(strstr(c->buf, "...") == NULL);
+    CHECK(strstr(c->buf, "protected-vlans add ") != NULL); /* split over several lines */
+    CHECK(strstr(c->buf, "init-timer wtb") != NULL);
+    char *saved = strdup(c->buf);
+    erps_cli_t *cli2 = new_cli(&f2);
+    int line = 0;
+    CHECK_EQ(erps_cli_exec_script(cli2, saved, cap_out, c2, &line), ERPS_OK);
+    const erps_cli_ring_extra_t *x2 = erps_cli_ring_extra(cli2, "R1");
+    REQUIRE(x2);
+    CHECK_MEMEQ(x->vlans, x2->vlans, sizeof x->vlans);
+    CHECK_EQ(run(cli2, c2, "show running-config erps"), ERPS_OK);
+    CHECK_STREQ(c2->buf, saved);
+    free(saved);
+    erps_cli_destroy(cli);
+    erps_cli_destroy(cli2);
+    free(c);
+    free(c2);
+}

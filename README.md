@@ -45,6 +45,10 @@ so it drops into a switch NOS, a Linux daemon or a simulator unchanged.
 - New R-APS information is never advertised before the platform has confirmed the port blocks it relies on.
 - Failed blocks and flushes are retried.
 
+**Optional faster cold start.** `init_wtb` (`init-timer wtb`) makes the owner use WTB rather than WTR
+at initialisation, as Appendix VIII's Table VIII.1 does. Otherwise a whole ring powered up together can stay
+split for the full WTR.
+
 Not in v1: sub-rings and interconnection (§9.7, §10.1.11–12), and the Appendix VIII flush optimisation.
 
 ## Quick start
@@ -155,11 +159,11 @@ frameworks. A configuration file is simply a command script.
 
 | Check | Command |
 |---|---|
-| 84 unit tests: every Table 10-2 row (both branches), priority logic, timers, Tx, flush, validity, FOP, manager, CLI, audit regressions | `make test` |
-| 21 scenario tests derived from the spec: Appendix III A–D, MS/FS/Clear, compat-v1, node failures, guard race, 1 h stability | `make test` |
+| 86 unit tests: every Table 10-2 row (both branches), priority logic, timers, Tx, flush, validity, FOP, manager, CLI, audit regressions | `make test` |
+| 24 scenario tests derived from the spec: Appendix III A–D, MS/FS/Clear, compat-v1, node failures, guard race, 1 h stability | `make test` |
 | Chaos/property test: random rings and faults; no loop ever, convergence to Idle. 300,000 seeds clean | `ERPS_CHAOS_SEEDS=300000 build/gcc/test-chaos` |
 | gcc + clang × {plain, ASan+UBSan}, `-Wall -Wextra -Wpedantic -Wconversion -Werror` | `make check` |
-| Line coverage: core 95.5 %, CLI 90 % | `make cov` |
+| Line coverage: core 95.4 %, CLI 91 % | `make cov` |
 | Linux end-to-end: 4 `erpsd` on 4 kernel bridges in a ring (Idle, no storm, failure, revert, clean shutdown; also run under ASan) | `make e2e` |
 | libFuzzer: PDU decoder, instance Rx path, simulator event sequences, CLI | `make fuzz` |
 | Two independent conformance reviews (GPT-6 via codex, Gemini via agy); findings fixed, each with a regression test | `tests/unit/test_audit.c` |

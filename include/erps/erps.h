@@ -227,6 +227,9 @@ typedef struct {
     erps_role_t role;          /**< default ERPS_ROLE_NONE */
     erps_port_t rpl_port;      /**< RPL port for owner / neighbour */
     bool revertive;            /**< default true (§10.1.13) */
+    bool init_wtb;             /**< owner starts WTB (not WTR) at initialisation, as in App. VIII
+                                    Table VIII.1 row 1: converges in guard+5 s instead of WTR after a
+                                    ring cold start. Default false (Table 10-2 row 1). */
     uint8_t compat_version;    /**< 1 or 2; default 2 (§10.1.13) */
 
     uint32_t wtr_ms;           /**< 1..12 min in 1 min steps; default 5 min (§10.1.4) */

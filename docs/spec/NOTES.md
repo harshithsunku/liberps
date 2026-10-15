@@ -283,3 +283,7 @@ off 36 : End TLV = 0
    - A periodic R-APS(SF) processed by no-op row 49 must not make the Clear "valid". If it did, row
      44 (no port blocked) would leave the owner Pending with no WTB, and the ring would never
      revert. The chaos test found this.
+9. **Row 71 is literal:** no role condition, unlike row 15. The highest node ID keeps the single
+   block. See CONFORMANCE.md #13.
+10. **`init_wtb` (opt-in)** starts WTB instead of WTR in row 1, following App. VIII Table VIII.1,
+    which avoids a WTR-long split after a ring cold start. See CONFORMANCE.md #14.
