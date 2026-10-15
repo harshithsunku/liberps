@@ -174,7 +174,8 @@ fuzz:
 	  clang $(FUZZ_FLAGS) -o $(FUZZ_BUILD)/$$n $$f $(LIB_SRC) $(SIM_SRC); \
 	  mkdir -p fuzz-corpus/$$n; \
 	  echo "== $$n ($(FUZZ_SECONDS)s)"; \
-	  $(FUZZ_BUILD)/$$n -max_total_time=$(FUZZ_SECONDS) -print_final_stats=1 fuzz-corpus/$$n; \
+	  $(FUZZ_BUILD)/$$n -max_total_time=$(FUZZ_SECONDS) -print_final_stats=1 \
+	    -dict=tests/fuzz/dict/erps.dict fuzz-corpus/$$n; \
 	done
 
 # ---- install ----------------------------------------------------------------------------------
