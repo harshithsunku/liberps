@@ -64,7 +64,17 @@ build/cc/erps-sim -f examples/appendix3.erps   # Appendix III scenario A, live
 t=608.000000 n0:A[B-] n1:A[--] n2:A[--] n3:A[--] n4:A[--] n5:A[--] n6:A[-B]
 ```
 
-To use the shell interactively, run `build/cc/erps-sim`, then for example:
+On Linux, `erpsd` runs the protocol on kernel bridges and `erpsctl` talks to it (details in
+[docs/LINUX.md](docs/LINUX.md)):
+
+```bash
+erpsd -c /etc/erpsd.conf &              # config = command script, see below
+erpsctl show erps
+erpsctl erps ring R1 force-switch port 0
+erpsctl show erps ring R1 detail json
+```
+
+To use the simulator shell interactively, run `build/cc/erps-sim`, then for example:
 - `sim create 5`
 - `run 6m`
 - `link 2 down`
@@ -145,12 +155,14 @@ frameworks. A configuration file is simply a command script.
 
 | Check | Command |
 |---|---|
-| 84 unit tests: every Table 10-2 row, priority logic, timers, Tx, flush, validity, FOP, CLI, audit regressions | `make test` |
-| 21 scenario tests from the spec: Appendix III A–D, MS/FS/Clear, compat-v1, node failures, guard race | `make test` |
-| Chaos/property test: random rings and faults; no loop ever, convergence to Idle (300k seeds clean) | `ERPS_CHAOS_SEEDS=300000 build/gcc/test-chaos` |
-| gcc + clang × {plain, ASan+UBSan}, `-Wall -Wextra -Wconversion -Werror` | `make check` |
-| Line coverage of the core ≥ 95 % | `make cov` |
+| 84 unit tests: every Table 10-2 row (both branches), priority logic, timers, Tx, flush, validity, FOP, manager, CLI, audit regressions | `make test` |
+| 21 scenario tests derived from the spec: Appendix III A–D, MS/FS/Clear, compat-v1, node failures, guard race, 1 h stability | `make test` |
+| Chaos/property test: random rings and faults; no loop ever, convergence to Idle. 300,000 seeds clean | `ERPS_CHAOS_SEEDS=300000 build/gcc/test-chaos` |
+| gcc + clang × {plain, ASan+UBSan}, `-Wall -Wextra -Wpedantic -Wconversion -Werror` | `make check` |
+| Line coverage: core 95.5 %, CLI 90 % | `make cov` |
+| Linux end-to-end: 4 `erpsd` on 4 kernel bridges in a ring (Idle, no storm, failure, revert, clean shutdown; also run under ASan) | `make e2e` |
 | libFuzzer: PDU decoder, instance Rx path, simulator event sequences, CLI | `make fuzz` |
+| Two independent conformance reviews (GPT-6 via codex, Gemini via agy); findings fixed, each with a regression test | `tests/unit/test_audit.c` |
 
 [docs/CONFORMANCE.md](docs/CONFORMANCE.md) maps every clause to its code and tests, and lists each spec
 interpretation with its rationale.
