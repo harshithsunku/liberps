@@ -52,7 +52,17 @@ void erps__platform_error(erps_t *e, const char *op, int rc, erps_port_t port)
 
 erps_time_t erps__deadline_after(const erps_t *e, uint64_t ms)
 {
-    return e->now + ERPS_MSEC(ms);
+    return erps__tadd(e->now, ERPS_MSEC(ms));
+}
+
+/* True when every port the state machine wants blocked is blocked in the dataplane. New R-APS
+ * information is never advertised before that holds: peers react to it by unblocking. */
+bool erps__blocks_confirmed(const erps_t *e)
+{
+    for (int p = 0; p < 2; p++)
+        if (e->port[p].blocked && !e->port[p].hw_synced)
+            return false;
+    return true;
 }
 
 static void sync_port(erps_t *e, erps_port_t p)
@@ -63,7 +73,7 @@ static void sync_port(erps_t *e, erps_port_t p)
     pp->hw_synced = rc == 0;
     if (rc) {
         erps__platform_error(e, "set_port_state", rc, p);
-        e->retry_deadline = e->now + ERPS_PLATFORM_RETRY_US;
+        e->retry_deadline = erps__tadd(e->now, ERPS_PLATFORM_RETRY_US);
     }
 }
 
@@ -113,10 +123,13 @@ static erps_err_t enter(erps_t *e, erps_time_t now)
     return ERPS_OK;
 }
 
+static void really_destroy(erps_t *e);
+
 static void leave(erps_t *e)
 {
     erps__flush_commit(e);
-    e->depth--;
+    if (--e->depth == 0 && e->destroy_pending)
+        really_destroy(e); /* destroyed from a callback: release now that nothing uses it */
 }
 
 static bool valid_port(erps_port_t p)
@@ -144,7 +157,14 @@ static void reset_runtime(erps_t *e)
         pp->sf = false;
         pp->holdoff_deadline = ERPS_TIME_NEVER;
         pp->pair_valid = false;
+        memset(pp->pair_node, 0, sizeof pp->pair_node); /* §10.1.10: (00:..:00, 0) */
+        pp->pair_bpr = 0;
+        pp->rx_seen = false;
+        pp->last_rx_time = 0;
+        memset(&pp->last_rx, 0, sizeof pp->last_rx);
     }
+    e->flush_retry = false;
+    e->flush_ind_until = 0;
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -201,14 +221,23 @@ erps_err_t erps_create(const erps_config_t *cfg, const erps_ops_t *ops, void *us
     return ERPS_OK;
 }
 
-void erps_destroy(erps_t *e)
+static void really_destroy(erps_t *e)
 {
-    if (!e || e->magic != ERPS_MAGIC)
-        return;
     bool heap = e->heap;
     e->magic = 0;
     if (heap)
         free(e);
+}
+
+void erps_destroy(erps_t *e)
+{
+    if (!e || e->magic != ERPS_MAGIC)
+        return;
+    if (e->depth) { /* called from one of our callbacks: defer until the call unwinds */
+        e->destroy_pending = true;
+        return;
+    }
+    really_destroy(e);
 }
 
 static void start_holdoff_or_declare(erps_t *e, erps_port_t p);
@@ -248,6 +277,8 @@ erps_err_t erps_stop(erps_t *e, erps_time_t now, bool block_ports)
         if (block_ports) {
             erps__port_set(e, ERPS_PORT0, true);
             erps__port_set(e, ERPS_PORT1, true);
+            if (!erps__blocks_confirmed(e))
+                rc = ERPS_E_PLATFORM; /* the caller must not assume the ring is safe */
         }
         erps_state_t from = e->state;
         reset_runtime(e);
@@ -258,7 +289,7 @@ erps_err_t erps_stop(erps_t *e, erps_time_t now, bool block_ports)
         erps__notify(e, &ev);
     }
     leave(e);
-    return ERPS_OK;
+    return rc;
 }
 
 erps_err_t erps_set_timers(erps_t *e, uint32_t wtr_ms, uint32_t guard_ms, uint32_t holdoff_ms)
@@ -282,7 +313,16 @@ erps_err_t erps_set_revertive(erps_t *e, bool revertive)
 {
     if (!e || e->magic != ERPS_MAGIC)
         return ERPS_E_INVAL;
+    if (e->depth)
+        return ERPS_E_BUSY;
     e->cfg.revertive = revertive;
+    /* Going non-revertive cancels a pending automatic reversion (§10.2.2.2: only an operator
+     * Clear reverts). Going revertive takes effect at the next recovery event, or use Clear. */
+    if (!erps__revertive(e) && (e->wtr_deadline != ERPS_TIME_NEVER ||
+                                e->wtb_deadline != ERPS_TIME_NEVER)) {
+        e->wtr_deadline = e->wtb_deadline = ERPS_TIME_NEVER;
+        erps__log(e, ERPS_LOG_NOTICE, "non-revertive: WTR/WTB stopped, use Clear to revert");
+    }
     return ERPS_OK;
 }
 
@@ -370,26 +410,30 @@ static erps_err_t rx_common(erps_t *e, erps_port_t p, const erps_rx_meta_t *meta
     uint8_t ring_id;
     if (!erps_is_raps_dmac(meta->dst, &ring_id))
         return drop(e, p, ERPS_DROP_DA);
-    if (ring_id != e->cfg.ring_id) /* §9.5, §10.1.6 */
-        return drop(e, p, ERPS_DROP_RING_ID);
+    if (plen < ERPS_PDU_HDR_LEN)
+        return drop(e, p, ERPS_DROP_SHORT);
 
-    erps_pdu_t pd;
-    erps_drop_t why = erps_pdu_decode(pdu, plen, &pd);
-    if (why == ERPS_DROP_SHORT || why == ERPS_DROP_OPCODE || why == ERPS_DROP_TLV_OFFSET)
-        return drop(e, p, why);
-    if (pd.mel != e->cfg.mel)
+    /* Software R-APS_FF (§9.5): forwarding on the R-APS VLAN is independent of this control
+     * process' validity check, like a hardware flow-forwarding function. MEG level filtering
+     * still applies: a frame below the ring MEL is discarded (G.8021 ETHDi). */
+    uint8_t mel = (uint8_t)(pdu[0] >> 5);
+    if (mel < e->cfg.mel)
         return drop(e, p, ERPS_DROP_MEL);
-
-    const erps_raps_msg_t *m = &pd.msg;
-    bool own = memcmp(m->node_id, e->cfg.node_id, 6) == 0;
-
-    /* R-APS_FF forwarding does not depend on the control process' validity check. */
+    bool own = pdu[1] == ERPS_OPCODE_RAPS && plen >= 12 && memcmp(pdu + 6, e->cfg.node_id, 6) == 0;
     if (e->cfg.sw_raps_forwarding && !own)
         sw_forward(e, p, meta, frame, flen, pdu, plen);
 
-    if (why != ERPS_DROP_NONE) /* reserved request/state or event sub-code (§10.1.6) */
+    /* Validity check (§10.1.6) for this control process */
+    if (ring_id != e->cfg.ring_id)
+        return drop(e, p, ERPS_DROP_RING_ID);
+    if (mel != e->cfg.mel)
+        return drop(e, p, ERPS_DROP_MEL);
+    erps_pdu_t pd;
+    erps_drop_t why = erps_pdu_decode(pdu, plen, &pd);
+    if (why != ERPS_DROP_NONE)
         return drop(e, p, why);
 
+    const erps_raps_msg_t *m = &pd.msg;
     erps_msg_kind_t kind = erps_msg_kind(m);
     if (kind < ERPS_MSG_COUNT)
         e->ctr.port[p].rx_raps[kind]++;
@@ -400,9 +444,13 @@ static erps_err_t rx_common(erps_t *e, erps_port_t p, const erps_rx_meta_t *meta
     erps__fop_rx(e, p, m);
 
     if (m->req == ERPS_RAPS_EVENT) {
-        /* Flush indication (§10.1.6): straight to the flush logic, not subject to the guard. */
-        erps__log(e, ERPS_LOG_DEBUG, "rx port %d: flush event", (int)p);
-        erps__flush_request(e);
+        /* Flush indication (§10.1.6): signalled to the flush logic, not subject to the guard
+         * timer, and disabled after 10 ms — the three copies of one burst flush once. */
+        if (e->now >= e->flush_ind_until) {
+            erps__log(e, ERPS_LOG_DEBUG, "rx port %d: flush event", (int)p);
+            erps__flush_request(e);
+        }
+        e->flush_ind_until = erps__tadd(e->now, ERPS_MSEC(10));
         return ERPS_OK;
     }
 
@@ -661,6 +709,10 @@ static bool fire_one_timer(erps_t *e)
         for (int p = 0; p < 2; p++)
             if (!e->port[p].hw_synced)
                 sync_port(e, (erps_port_t)p);
+        if (e->flush_retry) {
+            e->flush_retry = false;
+            erps__flush_request(e); /* committed when this poll completes */
+        }
         return true;
     default:
         return false;

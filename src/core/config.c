@@ -100,6 +100,9 @@ erps_err_t erps_config_validate(const erps_config_t *c, char *why, size_t why_le
         FAIL("tx interval %u ms out of range 1..60000", c->tx_interval_ms);
     if (c->tx_burst_us < 1 || c->tx_burst_us > 1000000u)
         FAIL("tx burst spacing %u us out of range 1..1000000", c->tx_burst_us);
+    if (!c->relaxed_timers && (c->tx_interval_ms != 5000u || c->tx_burst_us > 3333u))
+        FAIL("R-APS timing must be a burst spaced <= 3.33 ms then every 5 s (G.8032 10.1.3); "
+             "set relaxed_timers for lab values");
     if (c->fop_timeout_ms < 1 || c->fop_timeout_ms > MAX_RELAXED_MS)
         FAIL("FOP timeout %u ms out of range", c->fop_timeout_ms);
     if (c->history_depth > ERPS_HISTORY_MAX)

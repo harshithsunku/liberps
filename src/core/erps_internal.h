@@ -51,6 +51,7 @@ struct erps_port {
 /* A transmit slot: continuous R-APS (§10.1.3) or an event burst. */
 struct erps_txslot {
     bool active;
+    bool held;             /* new information waits for the platform to confirm port blocks */
     uint8_t sent;          /* messages sent since the information last changed */
     erps_raps_msg_t msg;
     erps_time_t next;
@@ -68,6 +69,7 @@ struct erps {
     erps_time_t now;       /* time of the input being processed */
     bool now_valid;
     int depth;             /* re-entrancy guard */
+    bool destroy_pending;  /* erps_destroy() called from a callback: free on unwind */
 
     struct erps_port port[2];
 
@@ -95,6 +97,8 @@ struct erps {
     erps_time_t fop_pm_deadline;
 
     bool flush_pending;    /* coalesced flush, committed when the input completes */
+    bool flush_retry;      /* the platform failed the last flush: retried from erps_poll() */
+    erps_time_t flush_ind_until; /* Event flush indication active until (§10.1.6: 10 ms) */
 
     /* debugging */
     erps_trace_t *cur;     /* history entry being filled by the running row */
@@ -113,6 +117,13 @@ void erps__notify(erps_t *e, erps_event_t *ev);
 void erps__platform_error(erps_t *e, const char *op, int rc, erps_port_t port);
 void erps__port_set(erps_t *e, erps_port_t p, bool blocked);
 erps_time_t erps__deadline_after(const erps_t *e, uint64_t ms);
+bool erps__blocks_confirmed(const erps_t *e);
+
+/* Saturating time addition: never wraps into the past, never reaches ERPS_TIME_NEVER. */
+static inline erps_time_t erps__tadd(erps_time_t t, erps_time_t d)
+{
+    return (t >= ERPS_TIME_NEVER - 1 - d) ? ERPS_TIME_NEVER - 1 : t + d;
+}
 
 static inline erps_port_t erps__other(erps_port_t p)
 {

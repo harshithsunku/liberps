@@ -55,8 +55,26 @@ static void send_both(erps_t *e, const erps_raps_msg_t *m)
 static erps_time_t after_send(const erps_t *e, uint8_t sent)
 {
     if (sent < 3)
-        return e->now + ERPS_USEC(e->cfg.tx_burst_us);
-    return e->now + ERPS_MSEC(e->cfg.tx_interval_ms);
+        return erps__tadd(e->now, ERPS_USEC(e->cfg.tx_burst_us));
+    return erps__tadd(e->now, ERPS_MSEC(e->cfg.tx_interval_ms));
+}
+
+/* First transmission of new information: the burst starts now, unless a port block the state
+ * machine relies on is not yet in the dataplane (platform failure being retried). Peers act on
+ * new information by unblocking, so it must never run ahead of our own blocks. */
+static void start_burst(erps_t *e)
+{
+    if (!erps__blocks_confirmed(e)) {
+        e->tx.held = true;
+        e->tx.sent = 0;
+        e->tx.next = ERPS_TIME_NEVER; /* released by erps__tx_poll() once blocks are confirmed */
+        erps__log(e, ERPS_LOG_WARN, "tx held: waiting for the platform to confirm port blocks");
+        return;
+    }
+    e->tx.held = false;
+    send_both(e, &e->tx.msg);
+    e->tx.sent = 1;
+    e->tx.next = after_send(e, e->tx.sent);
 }
 
 void erps__tx_start(erps_t *e, const erps_raps_msg_t *m)
@@ -68,7 +86,6 @@ void erps__tx_start(erps_t *e, const erps_raps_msg_t *m)
     e->tx.active = true;
     e->tx.msg = *m;
     e->tx.msg.status = erps_status_octet(m->rb, m->dnf, m->bpr);
-    e->tx.sent = 1;
     erps__trace_action(e, ERPS_ACT_TX);
     erps__trace_tx(e, &e->tx.msg);
     if (e->ops.log && e->cfg.log_level >= ERPS_LOG_DEBUG) {
@@ -76,15 +93,18 @@ void erps__tx_start(erps_t *e, const erps_raps_msg_t *m)
         erps_raps_msg_format(&e->tx.msg, b, sizeof b);
         erps__log(e, ERPS_LOG_DEBUG, "tx %s", b);
     }
-    send_both(e, &e->tx.msg);
-    e->tx.next = after_send(e, e->tx.sent);
+    start_burst(e);
 }
 
+/* Stop Tx R-APS: "stopping transmission of any R-APS messages" (§10.1.3), event bursts too. */
 void erps__tx_stop(erps_t *e)
 {
+    e->ev.active = false;
+    e->ev.next = ERPS_TIME_NEVER;
     if (!e->tx.active)
         return;
     e->tx.active = false;
+    e->tx.held = false;
     e->tx.next = ERPS_TIME_NEVER;
     erps__trace_action(e, ERPS_ACT_STOP_TX);
     erps__log(e, ERPS_LOG_DEBUG, "tx stopped");
@@ -98,12 +118,15 @@ void erps__tx_event(erps_t *e)
     e->ev.active = true;
     e->ev.sent = 1;
     send_both(e, &e->ev.msg);
-    e->ev.next = e->now + ERPS_USEC(e->cfg.tx_burst_us);
+    e->ev.next = erps__tadd(e->now, ERPS_USEC(e->cfg.tx_burst_us));
 }
 
 void erps__tx_poll(erps_t *e)
 {
-    if (e->tx.active && e->now >= e->tx.next) {
+    if (e->tx.active && e->tx.held) {
+        if (erps__blocks_confirmed(e))
+            start_burst(e);
+    } else if (e->tx.active && e->now >= e->tx.next) {
         send_both(e, &e->tx.msg);
         if (e->tx.sent < 255)
             e->tx.sent++;
@@ -116,7 +139,7 @@ void erps__tx_poll(erps_t *e)
             e->ev.active = false;
             e->ev.next = ERPS_TIME_NEVER;
         } else {
-            e->ev.next = e->now + ERPS_USEC(e->cfg.tx_burst_us);
+            e->ev.next = erps__tadd(e->now, ERPS_USEC(e->cfg.tx_burst_us));
         }
     }
 }

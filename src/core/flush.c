@@ -69,7 +69,11 @@ void erps__flush_commit(erps_t *e)
     e->flush_pending = false;
     int rc = e->ops.flush_fdb(e->user);
     if (rc) {
+        /* A lost flush would leave stale FDB entries after a topology change: retry. */
         erps__platform_error(e, "flush_fdb", rc, ERPS_PORT_NONE);
+        e->flush_retry = true;
+        if (e->retry_deadline == ERPS_TIME_NEVER)
+            e->retry_deadline = erps__tadd(e->now, ERPS_PLATFORM_RETRY_US);
         return;
     }
     e->ctr.flushes++;

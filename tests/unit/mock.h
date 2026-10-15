@@ -39,6 +39,8 @@ struct mock {
     int fail_set_port; /* number of set_port_state calls to fail */
     int fail_tx;
     int reenter;       /* call erps_poll from inside tx() */
+    int destroy_on_event; /* call erps_destroy from inside notify() */
+    int fail_flush;
     erps_err_t reenter_rc;
     char last_log[512];
 };
@@ -81,6 +83,10 @@ static int mock_port_cb(void *user, erps_port_t port, unsigned mask)
 static int mock_flush_cb(void *user)
 {
     struct mock *m = user;
+    if (m->fail_flush) {
+        m->fail_flush--;
+        return -1;
+    }
     m->flushes++;
     return 0;
 }
@@ -90,6 +96,10 @@ static void mock_notify_cb(void *user, const erps_event_t *ev)
     struct mock *m = user;
     if (m->nev < MOCK_MAX_EV)
         m->ev[m->nev++] = *ev;
+    if (m->destroy_on_event) {
+        m->destroy_on_event = 0;
+        erps_destroy(m->e);
+    }
 }
 
 static void mock_log_cb(void *user, erps_log_level_t lvl, const char *msg)
