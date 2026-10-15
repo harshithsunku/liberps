@@ -1,0 +1,38 @@
+# SPDX-License-Identifier: Apache-2.0
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: gcc + clang x {plain, ASan+UBSan} x {unit, scenario, chaos}
+        run: make check
+      - name: deep chaos (20k seeds)
+        run: ERPS_CHAOS_SEEDS=20000 build/gcc/test-chaos
+      - name: simulator demo script
+        run: build/gcc/erps-sim -q -f examples/appendix3.erps
+
+  coverage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: line coverage of the core (gate 95%)
+        run: |
+          make cov
+          python3 tools/covsum.py build/gcc-cov src/core 95
+
+  fuzz:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: toolchain
+        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: libFuzzer (60 s per target)
+        run: make fuzz FUZZ_SECONDS=60
