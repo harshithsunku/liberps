@@ -1,0 +1,9 @@
+prefix=@PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: erps
+Description: ITU-T G.8032 Ethernet Ring Protection Switching (single ring)
+Version: 0.1.0
+Libs: -L${libdir} -lerps
+Cflags: -I${includedir}

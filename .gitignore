@@ -1,0 +1,19 @@
+# Build output
+/build/
+*.o
+*.a
+*.so
+*.gcda
+*.gcno
+*.gcov
+*.pcap
+/coverage/
+/fuzz-corpus/
+crash-*
+leak-*
+timeout-*
+
+# ITU-T material: local reference only, (c) ITU -- never commit
+*.pdf
+docs/spec/G.8032-*
+docs/spec/figures/
