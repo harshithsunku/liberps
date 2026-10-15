@@ -6,6 +6,7 @@
 #   make CC=clang SAN=address,undefined test
 #   make check                gcc+clang x {plain, ASan+UBSan} x all tests (CI gate)
 #   make cov                  gcc --coverage, run tests, per-file line coverage of the core
+#   make e2e                  Linux: 4 erpsd on 4 bridges in a ring, in a netns (no root)
 #   make fuzz                 clang libFuzzer targets (FUZZ_SECONDS=60 per target)
 #   make install PREFIX=/usr/local
 #
@@ -138,6 +139,11 @@ $(BUILD)/test-chaos: $(CHAOS_SRC:%.c=$(BUILD)/obj/%.o) $(HARN_SRC:%.c=$(BUILD)/o
 
 test: all tests
 	@set -e; for t in $(TESTS); do echo "== $$t"; $$t $(TEST_ARGS); done
+
+# ---- Linux end-to-end (no root: user + network + mount namespace) ----------------------------
+.PHONY: e2e
+e2e: all
+	ERPSD=$(CURDIR)/$(BUILD)/erpsd ERPSCTL=$(CURDIR)/$(BUILD)/erpsctl bash tests/linux/ring4.sh
 
 # ---- CI gate ----------------------------------------------------------------------------------
 CHECK_CCS  ?= gcc clang

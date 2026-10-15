@@ -222,4 +222,21 @@ if flushes == 0:
 done
 pass "no platform errors (VLAN, FDB flush, tx) on any node; FDB flushes performed"
 
+# Graceful shutdown: every daemon exits 0 on SIGTERM, reports no sanitizer findings, and leaves
+# its ring ports blocked (VLAN 10 removed) so no unprotected loop remains.
+for p in "${pids[@]}"; do kill -TERM "$p"; done
+for i in "${!pids[@]}"; do
+    status=0
+    wait "${pids[$i]}" || status=$?
+    (( status == 0 )) || fail "erpsd #$i exited with status $status"
+done
+pids=()
+if grep -lE "AddressSanitizer|LeakSanitizer|runtime error:" "$tmp"/*.log; then
+    fail "sanitizer report in daemon logs"
+fi
+for port in a0 a1 b0 b1 c0 c1 d0 d1; do
+    if has_vid "$port"; then fail "VLAN 10 still on $port after shutdown"; fi
+done
+pass "graceful shutdown: exit 0, no sanitizer reports, ring ports blocked"
+
 echo 'PASS: ring4 end-to-end'
