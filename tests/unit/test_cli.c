@@ -289,3 +289,76 @@ TEST(cli_command_table)
     for (size_t i = 0; i < n; i++)
         CHECK(t[i].syntax && t[i].help && t[i].syntax[0] && t[i].help[0]);
 }
+
+TEST(cli_views_and_misc_paths)
+{
+    struct fake f;
+    struct capture c;
+    erps_cli_t *cli = new_cli(&f);
+    CHECK_EQ(run(cli, &c,
+                 "erps ring R1 ring-id 2 raps-vid 300 port0 eth5 port1 eth6 node-id 02:00:00:00:00:09 "
+                 "pcp 5 fop-pm off fop-to on fop-timeout 30s relaxed-timers on wtr 20s compat-version 1 "
+                 "mel 3 role neighbor rpl-port port1"),
+             ERPS_OK);
+    CHECK_EQ(run(cli, &c, "show erps ring R1"), ERPS_OK); /* disabled: shows config */
+    CHECK(strstr(c.buf, "disabled") != NULL);
+    CHECK_EQ(run(cli, &c, "show erps ring R1 json"), ERPS_OK);
+    CHECK(strstr(c.buf, "\"enabled\":false") != NULL);
+    CHECK_EQ(run(cli, &c, "erps ring R1 enable"), ERPS_OK);
+    static const char *views[] = { "status", "config", "counters", "history", "detail" };
+    for (size_t i = 0; i < 5; i++) {
+        char cmd[64];
+        snprintf(cmd, sizeof cmd, "show erps ring R1 %s", views[i]);
+        CHECK_EQ(run(cli, &c, cmd), ERPS_OK);
+        CHECK(c.len > 0);
+    }
+    CHECK_EQ(run(cli, &c, "show erps ring R1 bogus"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "show erps running-config"), ERPS_OK);
+    CHECK(strstr(c.buf, "pcp 5") && strstr(c.buf, "fop-pm off") && strstr(c.buf, "fop-to on") &&
+          strstr(c.buf, "fop-timeout 30s") && strstr(c.buf, "compat-version 1") &&
+          strstr(c.buf, "relaxed-timers on") && strstr(c.buf, "role neighbour rpl-port 1"));
+    CHECK_EQ(run(cli, &c, "show running-config"), ERPS_OK);
+    CHECK_EQ(run(cli, &c, "show running-config foo"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "show bogus"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "show erps foo bar"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "debug erps level info"), ERPS_OK);
+    CHECK_EQ(run(cli, &c, "debug erps level loud"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "debug erps ring R9 level info"), ERPS_E_NOTFOUND);
+    CHECK_EQ(run(cli, &c, "clear erps ring R1 counters"), ERPS_OK);
+    CHECK_EQ(run(cli, &c, "clear erps ring R9 counters"), ERPS_E_NOTFOUND);
+    CHECK_EQ(run(cli, &c, "clear erps bogus"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R1 flush-event"), ERPS_OK);
+    CHECK_EQ(run(cli, &c, "erps ring R1 force-switch"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R1 force-switch 1"), ERPS_E_REJECTED); /* compat v1 */
+    CHECK(strstr(c.buf, "compatible-version 1") != NULL);
+    CHECK_EQ(run(cli, &c, "erps ring R1 manual-switch 0"), ERPS_E_REJECTED);
+    CHECK_EQ(run(cli, &c, "erps ring R1 non-revertive"), ERPS_OK);  /* live */
+    CHECK_EQ(run(cli, &c, "erps ring R1 port0 eth7"), ERPS_E_STATE);
+    CHECK_EQ(run(cli, &c, "erps ring R1"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R9 enable"), ERPS_E_NOTFOUND);
+    CHECK_EQ(run(cli, &c, "erps ring R9 clear"), ERPS_E_NOTFOUND);
+    CHECK_EQ(run(cli, &c, "no erps ring R9"), ERPS_E_NOTFOUND);
+    CHECK_EQ(run(cli, &c, "erps ring R2 node-id zz"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R2 role boss"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R2 sw-forwarding maybe"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R2 protected-vlans 5-2"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R2 raps-vid"), ERPS_E_INVAL);
+    CHECK_EQ(run(cli, &c, "erps ring R2 timers wtr 5"), ERPS_E_CONFIG); /* checked at config time */
+    CHECK(strstr(c.buf, "WTR") != NULL);
+    CHECK_EQ(run(cli, &c, "erps ring THIS-NAME-IS-WAY-TOO-LONG-FOR-A-RING ring-id 1"), ERPS_E_INVAL);
+    CHECK_EQ(erps_cli_exec(cli, NULL, cap_out, &c), ERPS_E_INVAL);
+    CHECK(erps_cli_ring_extra(cli, "R1") != NULL);
+    CHECK(erps_cli_ring_extra(cli, "nope") == NULL);
+    CHECK(erps_cli_mgr(cli) != NULL);
+    erps_cli_destroy(cli);
+
+    /* a CLI without platform hooks: numeric port handles, rings cannot be enabled */
+    erps_cli_t *bare = erps_cli_create(NULL);
+    REQUIRE(bare);
+    CHECK_EQ(erps_cli_exec(bare, "erps ring X raps-vid 10 port0 3 port1 4 node-id 02:00:00:00:00:01",
+                           cap_out, &c),
+             ERPS_OK);
+    CHECK_EQ(erps_cli_exec(bare, "erps ring X port0 eth1", cap_out, &c), ERPS_E_INVAL);
+    CHECK_EQ(erps_cli_exec(bare, "erps ring X enable", cap_out, &c), ERPS_E_UNSUPPORTED);
+    erps_cli_destroy(bare);
+}
