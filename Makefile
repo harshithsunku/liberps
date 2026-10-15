@@ -17,6 +17,12 @@ COV       ?= 0
 OPT       ?= -O2 -g
 PREFIX    ?= /usr/local
 WERROR    ?= 1
+V         ?= 0
+ifeq ($(V),1)
+Q :=
+else
+Q := @
+endif
 
 comma := ,
 CCNAME    := $(notdir $(firstword $(CC)))
@@ -80,7 +86,7 @@ all: lib apps examples
 examples: $(EXAMPLES)
 
 $(BUILD)/%: $(BUILD)/obj/examples/%.o $(STATIC)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 lib: $(STATIC) $(SHARED)
 apps: $(APPS)
@@ -90,29 +96,30 @@ tests: $(TESTS)
 $(BUILD)/obj/src/%.o: CPPFLAGS += -DERPS_BUILDING
 $(BUILD)/obj/%.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+	@$(if $(Q),echo "  CC      $<")
+	$(Q)$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
 -include $(shell find $(BUILD) -name '*.d' 2>/dev/null)
 
 $(STATIC): $(LIB_OBJ)
 	@mkdir -p $(dir $@)
-	$(AR) rcs $@ $^
+	$(Q)$(AR) rcs $@ $^
 
 $(SHARED): $(LIB_OBJ)
-	$(CC) -shared $(LDFLAGS) -Wl,-soname,liberps.so.0 -o $@ $^
+	$(Q)$(CC) -shared $(LDFLAGS) -Wl,-soname,liberps.so.0 -o $@ $^
 
 $(SIMLIB): $(SIM_OBJ)
-	$(AR) rcs $@ $^
+	$(Q)$(AR) rcs $@ $^
 
 # ---- apps -------------------------------------------------------------------------------------
 $(BUILD)/erps-sim: $(BUILD)/obj/apps/erps-sim.o $(SIMLIB) $(STATIC)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD)/erpsd: $(BUILD)/obj/apps/erpsd.o $(LINUX_OBJ) $(STATIC)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD)/erpsctl: $(BUILD)/obj/apps/erpsctl.o $(STATIC)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 # ---- tests ------------------------------------------------------------------------------------
 # Tests link the objects directly (not the .so) so internal symbols are reachable.
@@ -121,13 +128,13 @@ TEST_CPPFLAGS := -Itests -DERPS_TESTING
 $(BUILD)/obj/tests/%.o: CPPFLAGS += $(TEST_CPPFLAGS)
 
 $(BUILD)/test-unit: $(UNIT_SRC:%.c=$(BUILD)/obj/%.o) $(HARN_SRC:%.c=$(BUILD)/obj/%.o) $(LIB_OBJ) $(SIM_OBJ)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD)/test-scenario: $(SCEN_SRC:%.c=$(BUILD)/obj/%.o) $(HARN_SRC:%.c=$(BUILD)/obj/%.o) $(LIB_OBJ) $(SIM_OBJ)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD)/test-chaos: $(CHAOS_SRC:%.c=$(BUILD)/obj/%.o) $(HARN_SRC:%.c=$(BUILD)/obj/%.o) $(LIB_OBJ) $(SIM_OBJ)
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	$(Q)$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 test: all tests
 	@set -e; for t in $(TESTS); do echo "== $$t"; $$t $(TEST_ARGS); done
