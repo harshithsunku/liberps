@@ -683,7 +683,6 @@ erps_err_t erps_poll(erps_t *e, erps_time_t now)
     return ERPS_OK;
 }
 
-#ifdef ERPS_TESTING
 void erps__test_fsm_run(erps_t *e, const erps_req_t *req, erps_time_t now)
 {
     if (enter(e, now) != ERPS_OK)
@@ -691,4 +690,3 @@ void erps__test_fsm_run(erps_t *e, const erps_req_t *req, erps_time_t now)
     erps__fsm_run(e, req);
     leave(e);
 }
-#endif

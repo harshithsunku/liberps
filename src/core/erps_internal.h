@@ -183,11 +183,9 @@ void erps__trace_end(erps_t *e);
 /* ---- names.c ---------------------------------------------------------------------------- */
 int erps__fmt_mac(const uint8_t mac[6], char *buf, size_t len);
 
-/* ---- test hooks (tests only) ------------------------------------------------------------ */
-#ifdef ERPS_TESTING
+/* ---- test hooks: hidden (not exported), used by unit tests ------------------------------ */
 /* Run one Table 10-2 row for an arbitrary request, bypassing the priority logic. */
 void erps__test_fsm_run(erps_t *e, const erps_req_t *req, erps_time_t now);
 void erps__test_set_state(erps_t *e, erps_state_t s);
-#endif
 
 #endif /* ERPS_INTERNAL_H */

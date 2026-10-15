@@ -733,9 +733,7 @@ void erps__fsm_run(erps_t *e, const erps_req_t *req)
     erps__trace_end(e);
 }
 
-#ifdef ERPS_TESTING
 void erps__test_set_state(erps_t *e, erps_state_t s)
 {
     e->state = s;
 }
-#endif
