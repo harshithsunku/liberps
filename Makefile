@@ -73,8 +73,14 @@ endif
 TESTS     := $(if $(UNIT_SRC),$(BUILD)/test-unit) $(if $(SCEN_SRC),$(BUILD)/test-scenario) \
              $(if $(CHAOS_SRC),$(BUILD)/test-chaos)
 
-.PHONY: all lib apps tests test check cov fuzz install clean distclean help
-all: lib apps
+.PHONY: all lib apps tests test check cov fuzz install clean distclean help examples
+EXAMPLES  := $(patsubst examples/%.c,$(BUILD)/%,$(wildcard examples/*.c))
+
+all: lib apps examples
+examples: $(EXAMPLES)
+
+$(BUILD)/%: $(BUILD)/obj/examples/%.o $(STATIC)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 lib: $(STATIC) $(SHARED)
 apps: $(APPS)
