@@ -51,9 +51,10 @@ typedef struct {
     int (*port_lookup)(void *ctx, const char *name, uint32_t *handle, uint8_t mac[6]);
     /** System MAC for "node-id auto". Optional. 0 = ok. */
     int (*system_mac)(void *ctx, uint8_t mac[6]);
-    /** Bind a ring that is being enabled to the dataplane: fill @p ops and @p user. 0 = ok;
-     *  on failure write a reason into @p err. */
-    int (*instance_bind)(void *ctx, const erps_config_t *cfg, const erps_cli_ring_extra_t *x,
+    /** Bind a ring that is being enabled to the dataplane: fill @p ops and @p user. The
+     *  platform may adjust @p cfg (e.g. force sw_raps_forwarding, set port MACs) before the
+     *  instance is created from it. 0 = ok; on failure write a reason into @p err. */
+    int (*instance_bind)(void *ctx, erps_config_t *cfg, const erps_cli_ring_extra_t *x,
                          erps_ops_t *ops, void **user, char *err, size_t errlen);
     /** Called after a ring is disabled and its instance destroyed. Optional. */
     void (*instance_unbind)(void *ctx, void *user);

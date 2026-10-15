@@ -429,9 +429,15 @@ static erps_err_t ring_enable(erps_cli_t *cli, struct ring *r, struct out *o)
     memset(&ops, 0, sizeof ops);
     void *user = NULL;
     why[0] = '\0';
-    if (cli->plat.instance_bind(cli->plat.ctx, &r->cfg, &r->x, &ops, &user, why, sizeof why) != 0)
+    erps_config_t run = r->cfg; /* the platform may adjust the running copy */
+    if (cli->plat.instance_bind(cli->plat.ctx, &run, &r->x, &ops, &user, why, sizeof why) != 0)
         return fail(o, ERPS_E_PLATFORM, "ring %s: %s", r->cfg.name, why[0] ? why : "bind failed");
-    erps_err_t rc = erps_mgr_add(cli->mgr, &r->cfg, &ops, user, &r->e);
+    if (erps_config_validate(&run, why, sizeof why) != ERPS_OK) {
+        if (cli->plat.instance_unbind)
+            cli->plat.instance_unbind(cli->plat.ctx, user);
+        return fail(o, ERPS_E_CONFIG, "ring %s: platform config: %s", r->cfg.name, why);
+    }
+    erps_err_t rc = erps_mgr_add(cli->mgr, &run, &ops, user, &r->e);
     if (rc != ERPS_OK) {
         if (cli->plat.instance_unbind)
             cli->plat.instance_unbind(cli->plat.ctx, user);
