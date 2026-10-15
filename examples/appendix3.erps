@@ -1,0 +1,37 @@
+# G.8032 Appendix III, scenario A: single link failure and revertive recovery.
+# 7 nodes A..G = n0..n6, logical node IDs as in the Recommendation, RPL = G-A (link 6),
+# G (n6) owner, A (n0) neighbour.
+#
+#   build/gcc/erps-sim -f examples/appendix3.erps
+sim create 7 id 0 81 id 1 26 id 2 89 id 3 62 id 4 71 id 5 31 id 6 75
+events off
+run 301s
+echo --- converged after WTR (row 1 starts WTR at the owner)
+show
+expect state 6 A
+expect blocked 6 1 yes
+expect blocked 0 0 yes
+events on
+echo --- C-D link fails (link 2)
+link 2 down
+run 1s
+show
+expect state 3 B
+expect blocked 2 1 yes
+expect blocked 3 0 yes
+expect blocked 6 1 no
+echo --- link recovers: C (89) keeps its block, D (62) unblocks on NR from the higher node ID
+link 2 up
+run 6s
+show
+expect blocked 2 1 yes
+expect blocked 3 0 no
+echo --- WTR expires at the owner: reversion
+events off
+run 300s
+show
+expect state 0 A
+expect blocked 6 1 yes
+expect blocked 2 1 no
+expect no-loops
+show erps ring n6 history

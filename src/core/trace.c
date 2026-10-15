@@ -43,6 +43,11 @@ void erps__trace_tx(erps_t *e, const erps_raps_msg_t *m)
         e->cur->tx = *m;
 }
 
+static bool is_noop(const erps_trace_t *t)
+{
+    return t->n_actions == 0 && t->from == t->to && t->ports_before == t->ports_after;
+}
+
 void erps__trace_end(erps_t *e)
 {
     erps_trace_t *t = e->cur;
@@ -50,10 +55,21 @@ void erps__trace_end(erps_t *e)
         return;
     t->to = e->state;
     t->ports_after = erps__ports_mask(e);
+    e->cur = NULL;
+    /* Periodic R-APS re-runs no-action rows (e.g. row 21 every 5 s in Protection). Fold such a
+     * run into the previous entry when it is the same no-op, so history keeps the transitions. */
+    if (is_noop(t) && e->hist_count) {
+        erps_trace_t *prev = &e->hist[(e->hist_next + depth(e) - 1u) % depth(e)];
+        if (is_noop(prev) && prev->row == t->row && prev->req.type == t->req.type) {
+            prev->repeats++;
+            prev->last_time = t->time;
+            e->seq--;
+            return;
+        }
+    }
     e->hist_next = (e->hist_next + 1u) % depth(e);
     if (e->hist_count < depth(e))
         e->hist_count++;
-    e->cur = NULL;
     if (e->ops.log && e->cfg.log_level >= ERPS_LOG_DEBUG) {
         char line[256];
         erps_trace_format(t, line, sizeof line);
@@ -216,6 +232,11 @@ int erps_trace_format(const erps_trace_t *t, char *buf, size_t len)
     for (unsigned i = 0; i < t->n_actions; i++)
         outf(&o, "%s%s", i ? " " : "", erps_action_str((erps_action_t)t->actions[i]));
     outf(&o, "] ports %s->%s", pb, pa);
+    if (t->repeats) {
+        char lt[32];
+        fmt_time(t->last_time, lt, sizeof lt);
+        outf(&o, " (x%u more, last t=%s)", t->repeats, lt);
+    }
     for (unsigned i = 0; i < t->n_actions; i++) {
         if (t->actions[i] == ERPS_ACT_TX) {
             char m[96];
@@ -511,7 +532,8 @@ static void json_history(struct out *o, const erps_t *e)
         outf(o, ",\"actions\":[");
         for (unsigned a = 0; a < t->n_actions; a++)
             outf(o, "%s\"%s\"", a ? "," : "", erps_action_str((erps_action_t)t->actions[a]));
-        outf(o, "],\"ports_before\":%u,\"ports_after\":%u}", t->ports_before, t->ports_after);
+        outf(o, "],\"ports_before\":%u,\"ports_after\":%u,\"repeats\":%u}", t->ports_before,
+             t->ports_after, t->repeats);
     }
     outf(o, "]");
 }

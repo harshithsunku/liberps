@@ -479,6 +479,8 @@ typedef struct {
     uint8_t n_actions;
     uint8_t actions[ERPS_TRACE_MAX_ACTIONS]; /**< erps_action_t, in execution order */
     erps_raps_msg_t tx;        /**< message started by ERPS_ACT_TX */
+    uint32_t repeats;          /**< further identical no-action runs folded into this entry */
+    erps_time_t last_time;     /**< time of the last folded repeat */
 } erps_trace_t;
 
 ERPS_API erps_err_t erps_get_status(const erps_t *e, erps_status_t *st);
