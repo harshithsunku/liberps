@@ -1,0 +1,59 @@
+# A tour of liberps on the simulator: operator commands, RPL failure (DNF), node failure,
+# and the command layer's views.   build/gcc/erps-sim -f examples/tour.erps
+sim create 5
+events off
+run 301s
+echo === Idle ring: RPL = link 4 (n4 owner, n0 neighbour)
+show
+show erps
+
+echo === Manual switch on n2 port 1: RPL opens, n2 blocks
+node 2 ms 1
+run 1s
+show
+expect state 0 C
+expect blocked 2 1 yes
+expect blocked 4 1 no
+echo --- a second MS elsewhere is rejected (G.8032 10.2.3 rule 1)
+node 3 ms 0
+echo --- clear: owner reverts after WTB (guard + 5 s)
+node 2 clear
+run 7s
+show
+expect state 0 A
+
+echo === Two forced switches segment the ring; clearing one keeps the other
+node 1 fs 0
+node 3 fs 1
+run 1s
+show
+expect blocked 1 0 yes
+expect blocked 3 1 yes
+node 1 clear
+run 6s
+node 3 clear
+run 7s
+show
+expect state 2 A
+
+echo === RPL failure: SF with DNF, no FDB flush anywhere
+clear erps counters
+link 4 down
+run 1s
+show
+show erps ring n2 counters
+link 4 up
+run 302s
+show
+expect state 4 A
+
+echo === Node 2 fails and comes back
+node 2 down
+run 2s
+show
+node 2 up
+run 302s
+show
+expect state 2 A
+expect no-loops
+show erps ring n4 detail
