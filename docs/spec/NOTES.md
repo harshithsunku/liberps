@@ -276,3 +276,10 @@ off 36 : End TLV = 0
    - A frame is forwarded rx-port → other port only when neither port is blocked and the frame carries a foreign node
      ID.
    - Forwarding happens before control processing, as a hardware R-APS_FF would do.
+8. **Clear at the RPL owner** is not applicable while the owner is in Manual-switch or
+   Forced-switch state without a local command.
+   - These states exist only while an MS/FS is in effect in the ring. Treating it that way
+     satisfies §10.1.9's intent, which is that Clear never overrides a remote FS/MS.
+   - A periodic R-APS(SF) processed by no-op row 49 must not make the Clear "valid". If it did, row
+     44 (no port blocked) would leave the owner Pending with no WTB, and the ring would never
+     revert. The chaos test found this.

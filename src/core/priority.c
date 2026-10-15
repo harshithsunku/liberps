@@ -208,10 +208,17 @@ erps_err_t erps__prio_command(erps_t *e, erps_cmd_t cmd, erps_port_t port, erps_
 
     case ERPS_CMD_CLEAR: {
         /* §10.1.9: Clear is valid if a local FS/MS is in effect, or if this is the RPL owner
-         * and the top-priority request is neither R-APS(FS) nor R-APS(MS). */
+         * and the top-priority request is neither R-APS(FS) nor R-APS(MS). The node states
+         * Manual-switch and Forced-switch exist only while an MS/FS is in effect in the ring, so
+         * an owner in C or D without a local command is treated as having R-APS(MS/FS) on top
+         * even if a lower message (e.g. a periodic R-APS(SF), row 49) was the last one signalled.
+         * Otherwise row 44/30 would move the owner to Pending with no WTB running (no port
+         * blocked) and nothing would ever revert the ring (found by the chaos test). */
         bool local_cmd = e->fs_active || e->ms_active;
         bool owner_ok = erps__is_owner(e) && e->top.type != ERPS_REQ_RAPS_FS &&
-                        e->top.type != ERPS_REQ_RAPS_MS;
+                        e->top.type != ERPS_REQ_RAPS_MS &&
+                        e->state != ERPS_STATE_FORCED_SWITCH &&
+                        e->state != ERPS_STATE_MANUAL_SWITCH;
         if (!local_cmd && !owner_ok) {
             reject(e, cmd, port, ERPS_REJECT_CLEAR_NOT_APPLICABLE, why);
             return ERPS_E_REJECTED;

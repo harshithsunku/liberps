@@ -72,7 +72,12 @@ ERPS_API void erps_sim_run_for(erps_sim_t *sim, erps_time_t dt);
 ERPS_API void erps_sim_link_set(erps_sim_t *sim, unsigned link, erps_sim_dir_t dir, bool up);
 ERPS_API bool erps_sim_link_up(const erps_sim_t *sim, unsigned link, erps_sim_dir_t dir);
 
-/** Node failure (power off: no Rx/Tx/timers, no forwarding) and recovery (fresh restart). */
+/**
+ * Node failure (power off: no Rx/Tx/timers, no forwarding) and recovery (fresh restart, row 1).
+ * Frames already on the wire are still delivered. Keep a node down longer than the ring's
+ * R-APS propagation time (real reboots take seconds): row 1 stops the guard timer, so a node
+ * restarted while its own pre-reboot messages are in flight can act on crossing stale ones.
+ */
 ERPS_API void erps_sim_node_set_up(erps_sim_t *sim, unsigned node, bool up);
 
 /** Operator command on a node. */

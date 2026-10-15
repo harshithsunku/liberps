@@ -723,3 +723,26 @@ TEST(api_names_cover_all_values)
         CHECK(strcmp(erps_strerror((erps_err_t)err), "unknown error") != 0);
     CHECK_STREQ(erps_version(), "0.1.0");
 }
+
+/* Chaos-test finding: an owner in Forced-switch state because of a remote FS must not accept
+ * Clear just because the last R-APS it processed was an R-APS(SF) (no-op row 49): row 44 would
+ * leave it Pending without WTB and the ring would never revert. */
+TEST(cmd_owner_clear_rejected_in_remote_fs_state)
+{
+    struct mock *m = idle_owner();
+    rx(m, ERPS_PORT0, ERPS_RAPS_FS, false, false, 0, 0x60);
+    CHECK_EQ(m->e->state, ERPS_STATE_FORCED_SWITCH);
+    rx(m, ERPS_PORT0, ERPS_RAPS_SF, false, false, 1, 0x61); /* row 49, top = R-APS(SF) */
+    CHECK_EQ(m->e->last_row, 49);
+    erps_reject_t why;
+    CHECK_EQ(erps_command(m->e, ERPS_CMD_CLEAR, ERPS_PORT0, m->now, &why), ERPS_E_REJECTED);
+    CHECK_EQ(why, ERPS_REJECT_CLEAR_NOT_APPLICABLE);
+    CHECK_EQ(m->e->state, ERPS_STATE_FORCED_SWITCH);
+    /* the FS is cleared at its origin: R-APS(NR) -> row 57 starts WTB -> reversion */
+    rx(m, ERPS_PORT0, ERPS_RAPS_NR, false, false, 0, 0x60);
+    CHECK_EQ(m->e->last_row == 57 || m->e->last_row == 69, 1);
+    CHECK(m->e->wtb_deadline != ERPS_TIME_NEVER);
+    mock_advance(m, ERPS_SEC(6));
+    CHECK_EQ(m->e->state, ERPS_STATE_IDLE);
+    mock_free(m);
+}
