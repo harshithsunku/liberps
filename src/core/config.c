@@ -45,6 +45,39 @@ void erps_config_init(erps_config_t *c)
 
 #define MAX_RELAXED_MS (24u * 3600u * 1000u)
 
+erps_err_t erps_config_validate_timers(const erps_config_t *c, char *why, size_t why_len)
+{
+    if (why && why_len)
+        why[0] = '\0';
+    if (!c)
+        return ERPS_E_INVAL;
+    if (c->relaxed_timers) {
+        if (c->wtr_ms < 1 || c->wtr_ms > MAX_RELAXED_MS)
+            FAIL("WTR %u ms out of range 1..%u ms", c->wtr_ms, MAX_RELAXED_MS);
+        if (c->guard_ms < 1 || c->guard_ms > MAX_RELAXED_MS)
+            FAIL("guard %u ms out of range 1..%u ms", c->guard_ms, MAX_RELAXED_MS);
+        if (c->holdoff_ms > MAX_RELAXED_MS)
+            FAIL("hold-off %u ms out of range 0..%u ms", c->holdoff_ms, MAX_RELAXED_MS);
+    } else {
+        if (c->wtr_ms < 60000u || c->wtr_ms > 720000u || c->wtr_ms % 60000u)
+            FAIL("WTR %u ms: must be 1..12 min in 1 min steps (G.8032 10.1.4)", c->wtr_ms);
+        if (c->guard_ms < 10u || c->guard_ms > 2000u || c->guard_ms % 10u)
+            FAIL("guard %u ms: must be 10..2000 ms in 10 ms steps (G.8032 10.1.5)", c->guard_ms);
+        if (c->holdoff_ms > 10000u || c->holdoff_ms % 100u)
+            FAIL("hold-off %u ms: must be 0..10 s in 100 ms steps (G.8032 10.1.8)",
+                 c->holdoff_ms);
+    }
+
+    if (c->tx_interval_ms < 1 || c->tx_interval_ms > 60000u)
+        FAIL("tx interval %u ms out of range 1..60000", c->tx_interval_ms);
+    if (c->tx_burst_us < 1 || c->tx_burst_us > 1000000u)
+        FAIL("tx burst spacing %u us out of range 1..1000000", c->tx_burst_us);
+    if (!c->relaxed_timers && (c->tx_interval_ms != 5000u || c->tx_burst_us > 3333u))
+        FAIL("R-APS timing must be a burst spaced <= 3.33 ms then every 5 s (G.8032 10.1.3); "
+             "set relaxed_timers for lab values");
+    return ERPS_OK;
+}
+
 erps_err_t erps_config_validate(const erps_config_t *c, char *why, size_t why_len)
 {
     static const uint8_t zero[6];
@@ -75,34 +108,14 @@ erps_err_t erps_config_validate(const erps_config_t *c, char *why, size_t why_le
     if (c->compat_version != 1 && c->compat_version != 2)
         FAIL("compatible-version must be 1 or 2");
 
-    if (c->relaxed_timers) {
-        if (c->wtr_ms < 1 || c->wtr_ms > MAX_RELAXED_MS)
-            FAIL("WTR %u ms out of range 1..%u ms", c->wtr_ms, MAX_RELAXED_MS);
-        if (c->guard_ms < 1 || c->guard_ms > MAX_RELAXED_MS)
-            FAIL("guard %u ms out of range 1..%u ms", c->guard_ms, MAX_RELAXED_MS);
-        if (c->holdoff_ms > MAX_RELAXED_MS)
-            FAIL("hold-off %u ms out of range 0..%u ms", c->holdoff_ms, MAX_RELAXED_MS);
-    } else {
-        if (c->wtr_ms < 60000u || c->wtr_ms > 720000u || c->wtr_ms % 60000u)
-            FAIL("WTR %u ms: must be 1..12 min in 1 min steps (G.8032 10.1.4)", c->wtr_ms);
-        if (c->guard_ms < 10u || c->guard_ms > 2000u || c->guard_ms % 10u)
-            FAIL("guard %u ms: must be 10..2000 ms in 10 ms steps (G.8032 10.1.5)", c->guard_ms);
-        if (c->holdoff_ms > 10000u || c->holdoff_ms % 100u)
-            FAIL("hold-off %u ms: must be 0..10 s in 100 ms steps (G.8032 10.1.8)",
-                 c->holdoff_ms);
-    }
+    erps_err_t trc = erps_config_validate_timers(c, why, why_len);
+    if (trc != ERPS_OK)
+        return trc;
 
     if (c->raps_pcp > 7)
         FAIL("R-APS PCP %u out of range 0..7", c->raps_pcp);
     if (c->tx_version != ERPS_TX_VERSION_AUTO && c->tx_version > 31)
         FAIL("tx version %u out of range 0..31", c->tx_version);
-    if (c->tx_interval_ms < 1 || c->tx_interval_ms > 60000u)
-        FAIL("tx interval %u ms out of range 1..60000", c->tx_interval_ms);
-    if (c->tx_burst_us < 1 || c->tx_burst_us > 1000000u)
-        FAIL("tx burst spacing %u us out of range 1..1000000", c->tx_burst_us);
-    if (!c->relaxed_timers && (c->tx_interval_ms != 5000u || c->tx_burst_us > 3333u))
-        FAIL("R-APS timing must be a burst spaced <= 3.33 ms then every 5 s (G.8032 10.1.3); "
-             "set relaxed_timers for lab values");
     if (c->fop_timeout_ms < 1 || c->fop_timeout_ms > MAX_RELAXED_MS)
         FAIL("FOP timeout %u ms out of range", c->fop_timeout_ms);
     if (c->history_depth > ERPS_HISTORY_MAX)

@@ -262,6 +262,11 @@ ERPS_API void erps_config_init(erps_config_t *cfg);
  */
 ERPS_API erps_err_t erps_config_validate(const erps_config_t *cfg, char *why, size_t why_len);
 
+/** Validate only the timer and Tx timing fields (WTR, guard, hold-off, Tx interval / burst,
+ *  under relaxed_timers). Used by configuration front ends to reject bad timers early. */
+ERPS_API erps_err_t erps_config_validate_timers(const erps_config_t *cfg, char *why,
+                                                size_t why_len);
+
 /* ------------------------------------------------------------------------------------------ */
 /* Platform interface                                                                         */
 /* ------------------------------------------------------------------------------------------ */

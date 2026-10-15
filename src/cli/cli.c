@@ -614,12 +614,7 @@ static erps_err_t ring_config(erps_cli_t *cli, struct ring *r, char **t, int n, 
                     c.name);
     if (timers_changed) {
         char why[200];
-        erps_config_t chk = c;
-        if (!node_explicit && !chk.node_id[0] && !chk.node_id[5])
-            chk.node_id[5] = 1; /* node-id resolved at enable; validate the rest */
-        if (!chk.raps_vid)
-            chk.raps_vid = 1;
-        if (erps_config_validate(&chk, why, sizeof why) != ERPS_OK && strstr(why, "ms"))
+        if (erps_config_validate_timers(&c, why, sizeof why) != ERPS_OK)
             return fail(o, ERPS_E_CONFIG, "%s", why);
     }
     if (r->enabled) {
