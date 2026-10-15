@@ -97,7 +97,7 @@ happens on the new topology.
 - `erps_destroy` from a callback is deferred until the outer call unwinds.
 
 **Memory.**
-- One instance is about 11 KB. Most of that is the 128-entry history; `ERPS_HISTORY_MAX` sets the size.
+- One instance is about 12 KB (12,408 bytes on x86-64). Most of that is the 128-entry history; `ERPS_HISTORY_MAX` sets the size.
 - Nothing is allocated after `erps_create`. `erps_init_static` allows fully static allocation.
 
 ## Simulator (src/platform/sim)
