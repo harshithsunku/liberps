@@ -36,7 +36,10 @@ int lnx_port_ref(lnx_t *l, int ifindex, lnx_port_t **out)
         return -1;
     p->fd = -1;
     p->ifindex = ifindex;
-    p->fd = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC, htons(ETH_P_ALL));
+    /* Protocol 0: the socket receives nothing until bind() below. Created with ETH_P_ALL it
+     * would queue frames from every interface before the bind and filter take effect, and
+     * those would be attributed to this ring port. */
+    p->fd = socket(AF_PACKET, SOCK_RAW | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     if (p->fd < 0)
         goto fail;
     int one = 1;

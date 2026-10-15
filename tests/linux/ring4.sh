@@ -209,4 +209,17 @@ wait_state idle 35
 assert_vlan_state idle
 pass "WTR expiry restored Idle and RPL blocking"
 
+for node in A B C D; do
+    "$client" -s "$tmp/$node.sock" show erps ring R1 counters json | python3 -c '
+import json, sys
+c = json.load(sys.stdin)["counters"]
+flushes = c["flushes"]
+if c["platform_errors"] != 0:
+    print("platform errors:", c["platform_errors"]); sys.exit(1)
+if flushes == 0:
+    print("no FDB flush performed"); sys.exit(1)
+' || fail "node $node: platform errors or no flushes"
+done
+pass "no platform errors (VLAN, FDB flush, tx) on any node; FDB flushes performed"
+
 echo 'PASS: ring4 end-to-end'

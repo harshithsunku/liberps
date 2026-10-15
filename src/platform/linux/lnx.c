@@ -143,9 +143,19 @@ static int op_tx(void *user, erps_port_t port, const uint8_t *frame, size_t len)
     if (port > ERPS_PORT1)
         return -EINVAL;
     int rc = lnx_port_tx(inst->port[port], frame, len);
-    if (rc < 0)
+    if (rc < 0) {
+        /* R-APS is sent on both ring ports even when one has failed (§10.1.3, needed for
+         * unidirectional failures). A port that is down, gone or momentarily out of buffers
+         * behaves like a lossy wire: the frame is lost, which periodic retransmission covers.
+         * Only other errors are platform faults. */
+        if (errno == ENETDOWN || errno == ENXIO || errno == ENOBUFS || errno == ENODEV) {
+            lnx_log(inst->lnx, ERPS_LOG_DEBUG, "%s Tx port %d dropped: %s", inst->name,
+                    (int)port, strerror(errno));
+            return 0;
+        }
         lnx_log(inst->lnx, ERPS_LOG_ERR, "%s Tx port %d: %s", inst->name, (int)port,
                 strerror(errno));
+    }
     return rc;
 }
 

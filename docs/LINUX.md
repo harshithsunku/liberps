@@ -28,8 +28,9 @@ ip link set ring0 up
 ip link set ring1 up
 ```
 
-The daemon requires both ports to have the same bridge master and reads
-`/sys/class/net/<bridge>/bridge/vlan_filtering` to confirm VLAN filtering. It uses the bridge
+The daemon requires both ports to have the same bridge master and confirms VLAN filtering over
+rtnetlink (`IFLA_BR_VLAN_FILTERING`). Sysfs is not used because it reflects the network
+namespace it was mounted in, which is wrong in containers. It uses the bridge
 master's MAC as the automatic node ID when it can identify the bridge from the most recently
 configured ring port; otherwise it takes the first non-loopback Ethernet MAC. Explicit `node-id`
 is recommended, especially when configuring several rings before enabling them.
@@ -76,5 +77,25 @@ The daemon's netlink operations are synchronous with a five-second timeout. Duri
 flush the event loop can pause for that operation. Port configuration changes after enabling
 an instance require disabling and re-enabling it.
 
-Run the four-node test with `tests/linux/ring4.sh`. It uses `unshare -Urn`; the kernel must
-allow unprivileged user namespaces and the host must have `ip`, `bridge`, and Python 3.
+A transmit on a ring port that is down (ENETDOWN, ENXIO, ENODEV) or momentarily out of buffers
+(ENOBUFS) counts as a frame lost on the wire, not as a platform error. R-APS is deliberately sent
+on both ports even when one has failed (G.8032 §10.1.3).
+
+FDB flushes are issued per ring port and protected VID. With thousands of protected VLANs a
+flush costs that many netlink requests.
+
+## End-to-end test
+
+`tests/linux/ring4.sh` needs no root. It re-executes itself in a user, network and mount
+namespace (`unshare -Urnm`) and remounts sysfs. It then builds four VLAN-filtering bridges joined
+by veth pairs into a ring, and runs one `erpsd` per bridge (D is the RPL owner, A the RPL
+neighbour). It checks, in order:
+
+1. Idle convergence, with VLAN 10 removed only at the RPL ends.
+2. Broadcasts cross the ring without a storm.
+3. A link failure leads to Protection with the RPL opened.
+4. Recovery leads, after WTR, back to Idle.
+5. No platform error occurred on any node.
+
+The kernel must allow unprivileged user namespaces, and the host must have `ip`, `bridge` and
+Python 3.
