@@ -172,10 +172,10 @@ fuzz:
 	done
 
 # ---- install ----------------------------------------------------------------------------------
-install: lib
+install: lib $(SIMLIB)
 	install -d $(DESTDIR)$(PREFIX)/include/erps $(DESTDIR)$(PREFIX)/lib $(DESTDIR)$(PREFIX)/lib/pkgconfig
 	install -m 644 include/erps/*.h $(DESTDIR)$(PREFIX)/include/erps/
-	install -m 644 $(STATIC) $(DESTDIR)$(PREFIX)/lib/
+	install -m 644 $(STATIC) $(SIMLIB) $(DESTDIR)$(PREFIX)/lib/
 	install -m 755 $(SHARED) $(DESTDIR)$(PREFIX)/lib/liberps.so.0
 	ln -sf liberps.so.0 $(DESTDIR)$(PREFIX)/lib/liberps.so
 	sed -e 's|@PREFIX@|$(PREFIX)|g' erps.pc.in > $(DESTDIR)$(PREFIX)/lib/pkgconfig/erps.pc
